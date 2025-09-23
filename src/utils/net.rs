@@ -5,6 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use crate::data::gps_data::GPSData;
+use crate::data::gps_data::GPSResponse;
 use serde_json::json;
 
 /// Type alias untuk WebSocket clients
@@ -13,9 +14,10 @@ pub type Clients = Arc<Mutex<Vec<Tx>>>;
 
 /// Broadcast GPSData ke semua client WS
 pub fn broadcast_gps(clients: &Clients, gps: &GPSData) {
+    let resp = GPSResponse::from(gps.clone());
     let message = Message::Text(json!({
         "type": "gps_update",
-        "data": gps
+        "data": resp
     }).to_string().into());
 
     // lock sekali, clone semua sender, lalu lepas

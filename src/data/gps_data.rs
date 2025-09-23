@@ -9,8 +9,8 @@ pub struct GPSRequest {
     pub longitude: f64,
     pub speed_over_ground: f64,   // knot
     pub course_over_ground: f64,  // derajat
-    pub update_rate: u64,         // ms
-    pub running: bool,
+    pub update_rate: Option<u64>, // ms (opsional, default 1000)
+    pub is_running: bool,
     pub magnetic_variation: Option<f64>,
 }
 
@@ -23,7 +23,7 @@ pub struct GPSData {
     pub speed_over_ground: f64,   // knot
     pub course_over_ground: f64,  // derajat
     pub update_rate: u64,         // ms
-    pub running: bool,
+    pub is_running: bool,
     pub magnetic_variation: Option<f64>,
     pub last_update: DateTime<Utc>, // otomatis RFC3339
 }
@@ -36,7 +36,7 @@ impl Default for GPSData {
             speed_over_ground: 0.0,
             course_over_ground: 0.0,
             update_rate: 1000,
-            running: false,
+            is_running: false,
             magnetic_variation: None,
             last_update: Utc::now(),
         }
@@ -50,10 +50,50 @@ impl From<GPSRequest> for GPSData {
             longitude: req.longitude,
             speed_over_ground: req.speed_over_ground,
             course_over_ground: req.course_over_ground,
-            update_rate: req.update_rate,
-            running: req.running,
+            update_rate: req.update_rate.unwrap_or(1000),
+            is_running: req.is_running,
             magnetic_variation: req.magnetic_variation,
             last_update: Utc::now(),
+        }
+    }
+}
+
+/// Struct khusus untuk response API (tidak ada update_rate).
+#[derive(Clone, Serialize, Debug)]
+pub struct GPSResponse {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub speed_over_ground: f64,   // knot
+    pub course_over_ground: f64,  // derajat
+    pub is_running: bool,
+    pub magnetic_variation: Option<f64>,
+    pub last_update: DateTime<Utc>, // RFC3339
+}
+
+impl From<GPSData> for GPSResponse {
+    fn from(data: GPSData) -> Self {
+        GPSResponse {
+            latitude: data.latitude,
+            longitude: data.longitude,
+            speed_over_ground: data.speed_over_ground,
+            course_over_ground: data.course_over_ground,
+            is_running: data.is_running,
+            magnetic_variation: data.magnetic_variation,
+            last_update: data.last_update,
+        }
+    }
+}
+
+impl From<&GPSData> for GPSResponse {
+    fn from(data: &GPSData) -> Self {
+        GPSResponse {
+            latitude: data.latitude,
+            longitude: data.longitude,
+            speed_over_ground: data.speed_over_ground,
+            course_over_ground: data.course_over_ground,
+            is_running: data.is_running,
+            magnetic_variation: data.magnetic_variation,
+            last_update: data.last_update,
         }
     }
 }

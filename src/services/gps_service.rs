@@ -74,7 +74,7 @@ pub fn start_gps_stream(store: GPSStore, clients: Clients) {
             };
 
             if let Some(mut gps) = gps_opt {
-                if gps.running {
+                if gps.is_running {
                     gps = update_gps_data(gps.clone());
 
                     {
