@@ -41,15 +41,15 @@ fn clamp_speed(speed: f64) -> f64 {
     }
 }
 
-/// Hitung posisi baru berdasarkan kecepatan (knot) dan arah (course_over_ground)
+/// Hitung posisi baru berdasarkan kecepatan (sog, knot) dan arah (cog, derajat)
 /// update_rate dalam milisecond
 pub fn calculate_new_position(data: &mut GPSData) -> (f64, f64) {
     let mut lat = data.latitude;
     let mut lon = data.longitude;
-    let mut course = data.course_over_ground;
+    let mut course = data.cog;
 
     // konversi speed dari knot ke meter/detik
-    let speed_mps = data.speed_over_ground * 0.514444;
+    let speed_mps = data.sog * 0.514444;
     let distance = speed_mps * (data.update_rate as f64 / 1000.0); // ms -> s
 
     // Delta linear pada sumbu latitude dan longitude
@@ -77,7 +77,7 @@ pub fn calculate_new_position(data: &mut GPSData) -> (f64, f64) {
     // Normalisasi longitude ke [-180, 180]
     lon = ((lon + 180.0).rem_euclid(360.0)) - 180.0;
 
-    data.course_over_ground = course;
+    data.cog = course;
     (lat, lon)
 }
 
@@ -111,8 +111,8 @@ pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_str: &str) -> f64 {
 /// Fungsi utama update GPS untuk simulasi
 pub fn update_gps_data(mut data: GPSData) -> GPSData {
     // Normalisasi input dulu
-    data.course_over_ground = normalize_course(data.course_over_ground);
-    data.speed_over_ground = clamp_speed(data.speed_over_ground);
+    data.cog = normalize_course(data.cog);
+    data.sog = clamp_speed(data.sog);
 
     // Hitung posisi baru
     let (new_lat, new_lon) = calculate_new_position(&mut data);
@@ -123,7 +123,7 @@ pub fn update_gps_data(mut data: GPSData) -> GPSData {
     update_last_update_time(&mut data);
 
     // Hitung magnetic variation baru
-    data.magnetic_variation = Some(calculate_magnetic_variation(
+    data.variation = Some(calculate_magnetic_variation(
         data.latitude,
         data.longitude,
         &data.last_update.to_rfc3339(),

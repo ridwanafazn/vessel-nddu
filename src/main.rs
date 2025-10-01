@@ -4,6 +4,7 @@ mod controllers;
 mod routes;
 mod utils;
 
+use std::time::Duration;
 use actix_web::{App, HttpServer, web};
 use actix_cors::Cors;
 use actix_web::http;
@@ -11,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use crate::utils::{handle_websocket_connection, handle_tcp_connection, Clients};
 use crate::services::gps_service::{GPSStore, start_gps_stream};
+use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -22,8 +24,12 @@ async fn main() -> std::io::Result<()> {
 
     println!("Server starting...");
 
-    // Mulai GPS streaming periodik
-    start_gps_stream(gps_store.clone(), clients.clone());
+    let mut mqttoptions = MqttOptions::new("vessel_client", "127.0.0.1", 1883);
+    mqttoptions.set_keep_alive(Duration::from_secs(5));
+    // Mulai GPS streaming periodik (tanpa MQTT client untuk sementara)
+    let (mqtt_client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
+    tokio::spawn(async move { loop { let _ = eventloop.poll().await; } });
+    start_gps_stream(gps_store.clone(), clients.clone(), Some(mqtt_client.clone()));
 
     // HTTP API server
     let api_server = HttpServer::new({

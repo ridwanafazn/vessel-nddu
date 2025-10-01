@@ -1,31 +1,43 @@
 use serde::{Serialize, Deserialize};
 use chrono::{Utc, DateTime};
 
-/// Request dari client untuk mulai/ubah simulasi.
-/// Tidak ada `last_update` karena diisi otomatis oleh server.
+/// Konfigurasi GPS (tidak keluar di API karena di-skip)
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct GPSConfig {
+    pub ip: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub update_rate: u64,        // ms
+    pub topics: Vec<String>,     // daftar topic MQTT
+}
+
+/// Request dari client untuk mulai/ubah simulasi GPS
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GPSRequest {
     pub latitude: f64,
     pub longitude: f64,
-    pub speed_over_ground: f64,   // knot
-    pub course_over_ground: f64,  // derajat
-    pub update_rate: Option<u64>, // ms (opsional, default 1000)
+    pub sog: f64,                   // speed over ground (knot)
+    pub cog: f64,                   // course over ground (derajat)
+    pub update_rate: Option<u64>,   // opsional, default 1000
     pub is_running: bool,
-    pub magnetic_variation: Option<f64>,
+    pub variation: Option<f64>,     // magnetic variation
 }
 
-/// State internal GPS yang digunakan simulator.
-/// Termasuk `last_update` otomatis dari server.
+/// Data GPS yang disimpan di store
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GPSData {
     pub latitude: f64,
     pub longitude: f64,
-    pub speed_over_ground: f64,   // knot
-    pub course_over_ground: f64,  // derajat
-    pub update_rate: u64,         // ms
+    pub sog: f64,
+    pub cog: f64,
+    pub update_rate: u64,
     pub is_running: bool,
-    pub magnetic_variation: Option<f64>,
-    pub last_update: DateTime<Utc>, // otomatis RFC3339
+    pub variation: Option<f64>,
+    pub last_update: DateTime<Utc>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub config: GPSConfig, // tetap ada di struct, tapi tidak keluar di API
 }
 
 impl Default for GPSData {
@@ -33,12 +45,20 @@ impl Default for GPSData {
         Self {
             latitude: 0.0,
             longitude: 0.0,
-            speed_over_ground: 0.0,
-            course_over_ground: 0.0,
+            sog: 0.0,
+            cog: 0.0,
             update_rate: 1000,
             is_running: false,
-            magnetic_variation: None,
+            variation: None,
             last_update: Utc::now(),
+            config: GPSConfig {
+                ip: "127.0.0.1".to_string(),
+                port: 1883,
+                username: "guest".to_string(),
+                password: "guest".to_string(),
+                update_rate: 1000,
+                topics: vec!["gps/default".to_string()],
+            },
         }
     }
 }
@@ -48,26 +68,34 @@ impl From<GPSRequest> for GPSData {
         GPSData {
             latitude: req.latitude,
             longitude: req.longitude,
-            speed_over_ground: req.speed_over_ground,
-            course_over_ground: req.course_over_ground,
+            sog: req.sog,
+            cog: req.cog,
             update_rate: req.update_rate.unwrap_or(1000),
             is_running: req.is_running,
-            magnetic_variation: req.magnetic_variation,
+            variation: req.variation,
             last_update: Utc::now(),
+            config: GPSConfig {
+                ip: "127.0.0.1".to_string(),
+                port: 1883,
+                username: "guest".to_string(),
+                password: "guest".to_string(),
+                update_rate: req.update_rate.unwrap_or(1000),
+                topics: vec!["gps/default".to_string()],
+            },
         }
     }
 }
 
-/// Struct khusus untuk response API (tidak ada update_rate).
+/// Response ke client (tidak ada config, naming singkat sog/cog)
 #[derive(Clone, Serialize, Debug)]
 pub struct GPSResponse {
     pub latitude: f64,
     pub longitude: f64,
-    pub speed_over_ground: f64,   // knot
-    pub course_over_ground: f64,  // derajat
+    pub sog: f64,
+    pub cog: f64,
     pub is_running: bool,
-    pub magnetic_variation: Option<f64>,
-    pub last_update: DateTime<Utc>, // RFC3339
+    pub variation: Option<f64>,
+    pub last_update: DateTime<Utc>,
 }
 
 impl From<GPSData> for GPSResponse {
@@ -75,10 +103,10 @@ impl From<GPSData> for GPSResponse {
         GPSResponse {
             latitude: data.latitude,
             longitude: data.longitude,
-            speed_over_ground: data.speed_over_ground,
-            course_over_ground: data.course_over_ground,
+            sog: data.sog,
+            cog: data.cog,
             is_running: data.is_running,
-            magnetic_variation: data.magnetic_variation,
+            variation: data.variation,
             last_update: data.last_update,
         }
     }
@@ -89,11 +117,12 @@ impl From<&GPSData> for GPSResponse {
         GPSResponse {
             latitude: data.latitude,
             longitude: data.longitude,
-            speed_over_ground: data.speed_over_ground,
-            course_over_ground: data.course_over_ground,
+            sog: data.sog,
+            cog: data.cog,
             is_running: data.is_running,
-            magnetic_variation: data.magnetic_variation,
+            variation: data.variation,
             last_update: data.last_update,
         }
     }
 }
+
