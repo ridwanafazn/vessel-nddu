@@ -1,5 +1,10 @@
 use serde::{Serialize, Deserialize};
 use chrono::{Utc, DateTime};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub type GPSStore = Arc<Mutex<Option<GPSData>>>;
+
 
 /// Konfigurasi GPS (tidak keluar di API karena di-skip)
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]

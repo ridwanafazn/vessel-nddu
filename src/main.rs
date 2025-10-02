@@ -4,11 +4,12 @@ mod controllers;
 mod routes;
 mod utils;
 
+use tokio::sync::Mutex;
 use std::time::Duration;
 use actix_web::{App, HttpServer, web};
 use actix_cors::Cors;
 use actix_web::http;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use tokio::net::TcpListener;
 use crate::utils::{handle_websocket_connection, handle_tcp_connection, Clients};
 use crate::services::gps_service::{GPSStore, start_gps_stream};
@@ -16,7 +17,7 @@ use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let gps_store = Arc::new(Mutex::new(None)) as GPSStore;
+    let gps_store: GPSStore = Arc::new(Mutex::new(None));
     let gps_store_data = web::Data::new(gps_store.clone());
 
     let clients: Clients = Arc::new(Mutex::new(Vec::new()));

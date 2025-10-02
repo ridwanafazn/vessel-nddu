@@ -3,9 +3,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex;
+use std::sync::Arc;
 use crate::data::gps_data::{GPSData, GPSResponse};
 use serde_json::json;
+use crate::data::gyro_data::GyroData;
 
 // tambahan untuk MQTT
 use crate::utils::mqtt::publish_gps_mqtt;
@@ -16,7 +18,7 @@ pub type Tx = mpsc::UnboundedSender<Message>;
 pub type Clients = Arc<Mutex<Vec<Tx>>>;
 
 /// Broadcast GPSData ke semua client WS
-pub fn broadcast_gps(clients: &Clients, gps: &GPSData) {
+pub async fn broadcast_gps(clients: &Clients, gps: &GPSData) {
     let resp = GPSResponse::from(gps.clone());
 
     // kirim JSON string ke semua client
@@ -28,25 +30,42 @@ pub fn broadcast_gps(clients: &Clients, gps: &GPSData) {
         .to_string().into(),
     );
 
-    let clients_clone = {
-        let clients_lock = clients.lock().unwrap();
-        clients_lock.clone()
-    };
-
-    for client in clients_clone.iter() {
-        // abaikan error jika client sudah disconnect
+    let clients_lock = clients.lock().await;
+    for client in clients_lock.iter() {
         let _ = client.send(message.clone());
     }
 }
 
 /// Dispatch GPS ke semua saluran (WS + MQTT)
 pub async fn dispatch_gps(clients: &Clients, gps: &GPSData, mqtt: Option<&AsyncClient>) {
-    broadcast_gps(clients, gps);
+    broadcast_gps(clients, gps).await;
 
     if let Some(client) = mqtt {
         if let Err(e) = publish_gps_mqtt(client, gps).await {
             eprintln!("MQTT publish error: {:?}", e);
         }
+    }
+}
+
+pub async fn dispatch_gyro(clients: &Clients, data: &GyroData, mqtt: Option<&AsyncClient>) {
+    let json = serde_json::json!({
+        "type": "gyro_update",
+        "data": data
+    }).to_string();
+
+    // broadcast ke WebSocket
+    let msg = Message::Text(json.clone().into());
+    let clients_lock = clients.lock().await;
+    for client in clients_lock.iter() {
+        let _ = client.send(msg.clone());
+    }
+    drop(clients_lock); // lepas lock lebih cepat
+
+    // publish ke MQTT
+    if let Some(mqtt) = mqtt {
+        let _ = mqtt
+            .publish("gyro/default", rumqttc::QoS::AtMostOnce, false, json)
+            .await;
     }
 }
 
@@ -57,7 +76,7 @@ pub async fn handle_websocket_connection(stream: TcpStream, clients: Clients) {
         let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 
         {
-            let mut clients_lock = clients.lock().unwrap();
+            let mut clients_lock = clients.lock().await;
             clients_lock.push(tx);
         }
 
@@ -69,7 +88,7 @@ pub async fn handle_websocket_connection(stream: TcpStream, clients: Clients) {
                     break;
                 }
             }
-            let mut clients_lock = clients_clone.lock().unwrap();
+            let mut clients_lock = clients_clone.lock().await;
             clients_lock.retain(|c| !c.is_closed());
         });
 
@@ -79,11 +98,8 @@ pub async fn handle_websocket_connection(stream: TcpStream, clients: Clients) {
                 Ok(Message::Text(text)) => {
                     // echo ke semua client
                     let message = Message::Text(text.clone());
-                    let clients_clone = {
-                        let clients_lock = clients.lock().unwrap();
-                        clients_lock.clone()
-                    };
-                    for client in clients_clone.iter() {
+                    let clients_lock = clients.lock().await;
+                    for client in clients_lock.iter() {
                         let _ = client.send(message.clone());
                     }
                 }

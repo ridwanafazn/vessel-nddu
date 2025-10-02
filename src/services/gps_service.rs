@@ -63,7 +63,7 @@ pub fn update_gps(
     }
 }
 
-pub fn delete_gps(store: &GPSStore, clients: Option<&Clients>) -> bool {
+pub async fn delete_gps(store: &GPSStore, clients: Option<&Clients>) -> bool {
     let mut lock = store.lock().unwrap();
     if lock.is_some() {
         *lock = None;
@@ -71,7 +71,7 @@ pub fn delete_gps(store: &GPSStore, clients: Option<&Clients>) -> bool {
             let msg = Message::Text(
                 r#"{"type": "gps_delete", "message": "Success to delete GPS live tracking."}"#.into(),
             );
-            let clients_lock = clients.lock().unwrap();
+            let clients_lock = clients.lock().await;
             for client in clients_lock.iter() {
                 let _ = client.send(msg.clone());
             }
