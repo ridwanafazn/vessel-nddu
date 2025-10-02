@@ -1,7 +1,8 @@
 use crate::data::gps_data::GPSData;
 use crate::utils::gps_calculate::update_gps_data;
 use crate::utils::net::{dispatch_gps, Clients};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 use tokio::time::{sleep, Duration};
 use rumqttc::AsyncClient;
@@ -10,7 +11,7 @@ use rumqttc::AsyncClient;
 pub type GPSStore = Arc<Mutex<Option<GPSData>>>;
 
 /// ===== CRUD GPS =====
-pub fn create_gps(
+pub async fn create_gps(
     store: &GPSStore,
     data: GPSData,
     clients: Option<&Clients>,
@@ -18,8 +19,10 @@ pub fn create_gps(
 ) {
     let gps = update_gps_data(data);
 
-    let mut lock = store.lock().unwrap();
-    *lock = Some(gps.clone());
+    {
+        let mut lock = store.lock().await;
+        *lock = Some(gps.clone());
+    }
 
     if let Some(clients) = clients {
         let mqtt = mqtt.cloned();
@@ -31,18 +34,18 @@ pub fn create_gps(
     }
 }
 
-pub fn get_gps(store: &GPSStore) -> Option<GPSData> {
-    let lock = store.lock().unwrap();
+pub async fn get_gps(store: &GPSStore) -> Option<GPSData> {
+    let lock = store.lock().await;
     lock.clone()
 }
 
-pub fn update_gps(
+pub async fn update_gps(
     store: &GPSStore,
-    update_fn: impl FnOnce(&mut GPSData),
+    update_fn: impl FnOnce(&mut GPSData) + Send + 'static,
     clients: Option<&Clients>,
     mqtt: Option<&AsyncClient>,
 ) -> Option<GPSData> {
-    let mut lock = store.lock().unwrap();
+    let mut lock = store.lock().await;
     if let Some(ref mut gps) = *lock {
         update_fn(gps);
         let updated = update_gps_data(gps.clone());
@@ -64,12 +67,13 @@ pub fn update_gps(
 }
 
 pub async fn delete_gps(store: &GPSStore, clients: Option<&Clients>) -> bool {
-    let mut lock = store.lock().unwrap();
+    let mut lock = store.lock().await;
     if lock.is_some() {
         *lock = None;
         if let Some(clients) = clients {
             let msg = Message::Text(
-                r#"{"type": "gps_delete", "message": "Success to delete GPS live tracking."}"#.into(),
+                r#"{"type": "gps_delete", "message": "Success to delete GPS live tracking."}"#
+                    .into(),
             );
             let clients_lock = clients.lock().await;
             for client in clients_lock.iter() {
@@ -88,7 +92,7 @@ pub fn start_gps_stream(store: GPSStore, clients: Clients, mqtt: Option<AsyncCli
     tokio::spawn(async move {
         loop {
             let gps_opt = {
-                let lock = store.lock().unwrap();
+                let lock = store.lock().await;
                 lock.clone()
             };
 
@@ -97,7 +101,7 @@ pub fn start_gps_stream(store: GPSStore, clients: Clients, mqtt: Option<AsyncCli
                     gps = update_gps_data(gps.clone());
 
                     {
-                        let mut lock = store.lock().unwrap();
+                        let mut lock = store.lock().await;
                         *lock = Some(gps.clone());
                     }
 

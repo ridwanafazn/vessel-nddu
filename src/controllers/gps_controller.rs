@@ -1,11 +1,7 @@
 use actix_web::{web, HttpResponse, Responder};
-use crate::data::gps_data::{
-    GPSData, GPSRequest, GPSResponse,
-    GPSConfig,
-};
+use crate::data::gps_data::{GPSData, GPSRequest, GPSResponse, GPSConfig};
 use crate::services::gps_service::{self, GPSStore};
 use crate::utils::net::Clients;
-use std::panic::AssertUnwindSafe;
 
 /// ==== GPS SECTION ====
 
@@ -23,7 +19,7 @@ pub struct UpdateGpsRequest {
 
 // PATCH CONFIG Request
 #[derive(serde::Deserialize)]
-pub struct UpdateConfigRequest {
+pub struct GpsConfigPatch {
     pub ip: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
@@ -40,7 +36,7 @@ pub async fn create_gps(
 ) -> impl Responder {
     let gps: GPSData = data.into_inner().into();
 
-    gps_service::create_gps(&store, gps.clone(), Some(&clients), None);
+    gps_service::create_gps(&store, gps.clone(), Some(&clients), None).await;
     if gps.is_running {
         gps_service::start_gps_stream(store.get_ref().clone(), clients.get_ref().clone(), None);
     }
@@ -53,7 +49,7 @@ pub async fn create_gps(
 
 /// GET GPS
 pub async fn get_gps(store: web::Data<GPSStore>) -> impl Responder {
-    match gps_service::get_gps(&store) {
+    match gps_service::get_gps(&store).await {
         Some(gps) => HttpResponse::Ok().json(serde_json::json!({
             "message": "Gps retrieved successfully.",
             "data": GPSResponse::from(gps)
@@ -70,50 +66,55 @@ pub async fn update_gps(
     clients: web::Data<Clients>,
     data: web::Json<UpdateGpsRequest>,
 ) -> impl Responder {
-    let mut changed = false;
+    let patch = data.into_inner();
+    let mut changed_flag = false;
 
-    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-        gps_service::update_gps(
-            &store,
-            |gps| {
-                if let Some(lat) = data.latitude {
+    let result = gps_service::update_gps(
+        &store,
+        {
+            let mut changed = false;
+            move |gps| {
+                if let Some(lat) = patch.latitude {
                     gps.latitude = lat;
                     changed = true;
                 }
-                if let Some(lon) = data.longitude {
+                if let Some(lon) = patch.longitude {
                     gps.longitude = lon;
                     changed = true;
                 }
-                if let Some(sog) = data.sog {
+                if let Some(sog) = patch.sog {
                     gps.sog = sog;
                     changed = true;
                 }
-                if let Some(cog) = data.cog {
+                if let Some(cog) = patch.cog {
                     gps.cog = cog;
                     changed = true;
                 }
-                if let Some(rate) = data.update_rate {
+                if let Some(rate) = patch.update_rate {
                     gps.update_rate = rate;
-                    gps.config.update_rate = rate; // sinkron dengan config
+                    gps.config.update_rate = rate;
                     changed = true;
                 }
-                if let Some(running) = data.is_running {
+                if let Some(running) = patch.is_running {
                     gps.is_running = running;
                     changed = true;
                 }
-                if let Some(var) = data.variation {
+                if let Some(var) = patch.variation {
                     gps.variation = Some(var);
                     changed = true;
                 }
-            },
-            Some(&clients),
-            None,
-        )
-    }));
+                if changed {
+                    changed_flag = true;
+                }
+            }
+        },
+        Some(&clients),
+        None,
+    ).await;
 
     match result {
-        Ok(Some(gps)) => {
-            if !changed {
+        Some(gps) => {
+            if !changed_flag {
                 return HttpResponse::Ok().json(serde_json::json!({
                     "message": "Nothing changed",
                     "data": GPSResponse::from(gps)
@@ -129,11 +130,8 @@ pub async fn update_gps(
                 "data": GPSResponse::from(gps)
             }))
         }
-        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+        None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "Failed to update GPS Data"
-        })),
-        Err(_) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "message": "Internal server error."
         })),
     }
 }
@@ -143,7 +141,7 @@ pub async fn delete_gps(
     store: web::Data<GPSStore>,
     clients: web::Data<Clients>,
 ) -> impl Responder {
-    if gps_service::delete_gps(&store, Some(&clients)) {
+    if gps_service::delete_gps(&store, Some(&clients)).await {
         HttpResponse::Ok().json(serde_json::json!({
             "message": "Success to delete GPS live tracking."
         }))
@@ -157,10 +155,10 @@ pub async fn delete_gps(
 /// ==== CONFIG SECTION ====
 /// GET CONFIG
 pub async fn get_config(store: web::Data<GPSStore>) -> impl Responder {
-    match gps_service::get_gps(&store) {
+    match gps_service::get_gps(&store).await {
         Some(gps) => HttpResponse::Ok().json(serde_json::json!({
             "message": "Config retrieved successfully.",
-            "data": gps.config // langsung kirim config
+            "data": gps.config
         })),
         None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "GPS Data not found"
@@ -171,47 +169,53 @@ pub async fn get_config(store: web::Data<GPSStore>) -> impl Responder {
 /// PATCH CONFIG
 pub async fn update_config(
     store: web::Data<GPSStore>,
-    data: web::Json<UpdateConfigRequest>,
+    data: web::Json<GpsConfigPatch>,
 ) -> impl Responder {
-    let mut changed = false;
     let cfg_patch = data.into_inner();
+    let mut changed_flag = false;
 
     let result = gps_service::update_gps(
         &store,
-        |gps| {
-            if let Some(ip) = cfg_patch.ip {
-                gps.config.ip = ip;
-                changed = true;
-            }
-            if let Some(port) = cfg_patch.port {
-                gps.config.port = port;
-                changed = true;
-            }
-            if let Some(username) = cfg_patch.username {
-                gps.config.username = username;
-                changed = true;
-            }
-            if let Some(password) = cfg_patch.password {
-                gps.config.password = password;
-                changed = true;
-            }
-            if let Some(rate) = cfg_patch.update_rate {
-                gps.config.update_rate = rate;
-                gps.update_rate = rate; // sinkronisasi ke GPSData
-                changed = true;
-            }
-            if let Some(topics) = cfg_patch.topics {
-                gps.config.topics = topics;
-                changed = true;
+        {
+            move |gps| {
+                let mut changed = false;
+                if let Some(ip) = &cfg_patch.ip {
+                    gps.config.ip = ip.clone();
+                    changed = true;
+                }
+                if let Some(port) = cfg_patch.port {
+                    gps.config.port = port;
+                    changed = true;
+                }
+                if let Some(username) = &cfg_patch.username {
+                    gps.config.username = username.clone();
+                    changed = true;
+                }
+                if let Some(password) = &cfg_patch.password {
+                    gps.config.password = password.clone();
+                    changed = true;
+                }
+                if let Some(rate) = cfg_patch.update_rate {
+                    gps.config.update_rate = rate;
+                    gps.update_rate = rate;
+                    changed = true;
+                }
+                if let Some(topics) = &cfg_patch.topics {
+                    gps.config.topics = topics.clone();
+                    changed = true;
+                }
+                if changed {
+                    changed_flag = true;
+                }
             }
         },
         None,
         None,
-    );
+    ).await;
 
     match result {
         Some(gps) => {
-            if !changed {
+            if !changed_flag {
                 return HttpResponse::Ok().json(serde_json::json!({
                     "message": "Nothing changed",
                     "data": gps.config
@@ -233,18 +237,11 @@ pub async fn delete_config(store: web::Data<GPSStore>) -> impl Responder {
     let result = gps_service::update_gps(
         &store,
         |gps| {
-            gps.config = GPSConfig {
-                ip: "127.0.0.1".to_string(),
-                port: 1883,
-                username: "guest".to_string(),
-                password: "guest".to_string(),
-                update_rate: 1000,
-                topics: vec!["gps/default".to_string()],
-            };
+            gps.config = GPSConfig::default();
         },
         None,
         None,
-    );
+    ).await;
 
     match result {
         Some(gps) => HttpResponse::Ok().json(serde_json::json!({

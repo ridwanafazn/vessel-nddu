@@ -1,7 +1,8 @@
 use crate::data::gyro_data::GyroData;
 use crate::utils::gyro_calculate::update_gyro_data;
 use crate::utils::net::{dispatch_gyro, Clients};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
 use tokio::time::{sleep, Duration};
 use rumqttc::AsyncClient;
@@ -10,7 +11,7 @@ use rumqttc::AsyncClient;
 pub type GyroStore = Arc<Mutex<Option<GyroData>>>;
 
 /// ===== CRUD Gyro =====
-pub fn create_gyro(
+pub async fn create_gyro(
     store: &GyroStore,
     data: GyroData,
     clients: Option<&Clients>,
@@ -18,8 +19,10 @@ pub fn create_gyro(
 ) {
     let gyro = update_gyro_data(data);
 
-    let mut lock = store.lock().unwrap();
-    *lock = Some(gyro.clone());
+    {
+        let mut lock = store.lock().await;
+        *lock = Some(gyro.clone());
+    }
 
     if let Some(clients) = clients {
         let mqtt = mqtt.cloned();
@@ -31,18 +34,18 @@ pub fn create_gyro(
     }
 }
 
-pub fn get_gyro(store: &GyroStore) -> Option<GyroData> {
-    let lock = store.lock().unwrap();
+pub async fn get_gyro(store: &GyroStore) -> Option<GyroData> {
+    let lock = store.lock().await;
     lock.clone()
 }
 
-pub fn update_gyro(
+pub async fn update_gyro(
     store: &GyroStore,
-    update_fn: impl FnOnce(&mut GyroData),
+    update_fn: impl FnOnce(&mut GyroData) + Send + 'static,
     clients: Option<&Clients>,
     mqtt: Option<&AsyncClient>,
 ) -> Option<GyroData> {
-    let mut lock = store.lock().unwrap();
+    let mut lock = store.lock().await;
     if let Some(ref mut gyro) = *lock {
         update_fn(gyro);
         let updated = update_gyro_data(gyro.clone());
@@ -64,7 +67,7 @@ pub fn update_gyro(
 }
 
 pub async fn delete_gyro(store: &GyroStore, clients: Option<&Clients>) -> bool {
-    let mut lock = store.lock().unwrap();
+    let mut lock = store.lock().await;
     if lock.is_some() {
         // Hapus data gyro
         *lock = None;
@@ -72,7 +75,9 @@ pub async fn delete_gyro(store: &GyroStore, clients: Option<&Clients>) -> bool {
         // Broadcast ke semua client WebSocket
         if let Some(clients) = clients {
             let msg = Message::Text(
-                r#"{"type": "gyro_delete", "message": "Success to delete Gyro live tracking."}"#.to_string().into(),
+                r#"{"type": "gyro_delete", "message": "Success to delete Gyro live tracking."}"#
+                    .to_string()
+                    .into(),
             );
 
             let clients_lock = clients.lock().await;
@@ -93,7 +98,7 @@ pub fn start_gyro_stream(store: GyroStore, clients: Clients, mqtt: Option<AsyncC
     tokio::spawn(async move {
         loop {
             let gyro_opt = {
-                let lock = store.lock().unwrap();
+                let lock = store.lock().await;
                 lock.clone()
             };
 
@@ -102,7 +107,7 @@ pub fn start_gyro_stream(store: GyroStore, clients: Clients, mqtt: Option<AsyncC
                     gyro = update_gyro_data(gyro.clone());
 
                     {
-                        let mut lock = store.lock().unwrap();
+                        let mut lock = store.lock().await;
                         *lock = Some(gyro.clone());
                     }
 

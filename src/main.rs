@@ -9,36 +9,56 @@ use std::time::Duration;
 use actix_web::{App, HttpServer, web};
 use actix_cors::Cors;
 use actix_web::http;
-use std::sync::{Arc};
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use crate::utils::{handle_websocket_connection, handle_tcp_connection, Clients};
 use crate::services::gps_service::{GPSStore, start_gps_stream};
+use crate::services::gyro_service::{GyroStore, start_gyro_stream};
 use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    // Shared state
     let gps_store: GPSStore = Arc::new(Mutex::new(None));
     let gps_store_data = web::Data::new(gps_store.clone());
+
+    let gyro_store: GyroStore = Arc::new(Mutex::new(None));
+    let gyro_store_data = web::Data::new(gyro_store.clone());
 
     let clients: Clients = Arc::new(Mutex::new(Vec::new()));
     let clients_data = web::Data::new(clients.clone());
 
     println!("Server starting...");
 
+    // MQTT client setup
     let mut mqttoptions = MqttOptions::new("vessel_client", "127.0.0.1", 1883);
     mqttoptions.set_keep_alive(Duration::from_secs(5));
-    // Mulai GPS streaming periodik (tanpa MQTT client untuk sementara)
+
     let (mqtt_client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-    tokio::spawn(async move { loop { let _ = eventloop.poll().await; } });
+
+    // MQTT eventloop
+    tokio::spawn(async move {
+        loop {
+            if let Err(e) = eventloop.poll().await {
+                eprintln!("MQTT error: {:?}", e);
+            }
+        }
+    });
+
+    // Start sensor services (streaming)
     start_gps_stream(gps_store.clone(), clients.clone(), Some(mqtt_client.clone()));
+    start_gyro_stream(gyro_store.clone(), clients.clone(), Some(mqtt_client.clone()));
 
     // HTTP API server
     let api_server = HttpServer::new({
         let gps_store = gps_store_data.clone();
+        let gyro_store = gyro_store_data.clone();
         let clients = clients_data.clone();
+
         move || {
             App::new()
                 .app_data(gps_store.clone())
+                .app_data(gyro_store.clone())
                 .app_data(clients.clone())
                 .wrap(
                     Cors::default()
@@ -48,11 +68,15 @@ async fn main() -> std::io::Result<()> {
                         .allowed_header(http::header::CONTENT_TYPE)
                         .max_age(3600),
                 )
-                .configure(|cfg| routes::gps_routes::init(cfg))
+                .configure(|cfg| {
+                    routes::gps_routes::init(cfg);
+                    routes::gyro_routes::init(cfg);
+                })
         }
     })
     .bind("127.0.0.1:8080")?
     .run();
+
     println!("API Server started on http://localhost:8080");
 
     // WebSocket server
@@ -75,6 +99,6 @@ async fn main() -> std::io::Result<()> {
         }
     });
 
-    // Menjalankan API server (blocking future)
+    // Run API server (blocking future)
     api_server.await
 }

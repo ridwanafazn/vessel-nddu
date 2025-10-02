@@ -1,10 +1,7 @@
 use actix_web::{web, HttpResponse, Responder};
-use crate::data::gyro_data::{
-    GyroData, GyroRequest, GyroResponse, GyroConfig,
-};
+use crate::data::gyro_data::{GyroData, GyroRequest, GyroResponse, GyroConfig};
 use crate::services::gyro_service::{self, GyroStore};
 use crate::utils::net::Clients;
-use std::panic::AssertUnwindSafe;
 
 /// ==== GYRO SECTION ====
 
@@ -20,7 +17,7 @@ pub struct UpdateGyroRequest {
 
 // PATCH CONFIG Request
 #[derive(serde::Deserialize)]
-pub struct UpdateConfigRequest {
+pub struct GyroConfigPatch {
     pub ip: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
@@ -37,8 +34,9 @@ pub async fn create_gyro(
 ) -> impl Responder {
     let gyro: GyroData = data.into_inner().into();
 
-    gyro_service::create_gyro(&store, gyro.clone(), Some(&clients), None);
+    gyro_service::create_gyro(&store, gyro.clone(), Some(&clients), None).await;
     if gyro.is_running {
+        // fungsi ini sync, jangan pakai await
         gyro_service::start_gyro_stream(store.get_ref().clone(), clients.get_ref().clone(), None);
     }
 
@@ -50,7 +48,7 @@ pub async fn create_gyro(
 
 /// GET GYRO
 pub async fn get_gyro(store: web::Data<GyroStore>) -> impl Responder {
-    match gyro_service::get_gyro(&store) {
+    match gyro_service::get_gyro(&store).await {
         Some(gyro) => HttpResponse::Ok().json(serde_json::json!({
             "message": "Gyro retrieved successfully.",
             "data": GyroResponse::from(gyro)
@@ -67,41 +65,46 @@ pub async fn update_gyro(
     clients: web::Data<Clients>,
     data: web::Json<UpdateGyroRequest>,
 ) -> impl Responder {
-    let mut changed = false;
+    let patch = data.into_inner();
+    let mut changed_flag = false;
 
-    let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
-        gyro_service::update_gyro(
-            &store,
-            |gyro| {
-                if let Some(heading) = data.heading_true {
+    let result = gyro_service::update_gyro(
+        &store,
+        {
+            move |gyro| {
+                let mut changed = false;
+                if let Some(heading) = patch.heading_true {
                     gyro.heading_true = heading;
                     changed = true;
                 }
-                if let Some(pitch) = data.pitch {
+                if let Some(pitch) = patch.pitch {
                     gyro.pitch = pitch;
                     changed = true;
                 }
-                if let Some(roll) = data.roll {
+                if let Some(roll) = patch.roll {
                     gyro.roll = roll;
                     changed = true;
                 }
-                if let Some(rate) = data.heading_rate {
+                if let Some(rate) = patch.heading_rate {
                     gyro.heading_rate = rate;
                     changed = true;
                 }
-                if let Some(running) = data.is_running {
+                if let Some(running) = patch.is_running {
                     gyro.is_running = running;
                     changed = true;
                 }
-            },
-            Some(&clients),
-            None,
-        )
-    }));
+                if changed {
+                    changed_flag = true;
+                }
+            }
+        },
+        Some(&clients),
+        None,
+    ).await;
 
     match result {
-        Ok(Some(gyro)) => {
-            if !changed {
+        Some(gyro) => {
+            if !changed_flag {
                 return HttpResponse::Ok().json(serde_json::json!({
                     "message": "Nothing changed",
                     "data": GyroResponse::from(gyro)
@@ -117,11 +120,8 @@ pub async fn update_gyro(
                 "data": GyroResponse::from(gyro)
             }))
         }
-        Ok(None) => HttpResponse::NotFound().json(serde_json::json!({
+        None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "Failed to update Gyro Data"
-        })),
-        Err(_) => HttpResponse::InternalServerError().json(serde_json::json!({
-            "message": "Internal server error."
         })),
     }
 }
@@ -131,7 +131,7 @@ pub async fn delete_gyro(
     store: web::Data<GyroStore>,
     clients: web::Data<Clients>,
 ) -> impl Responder {
-    if gyro_service::delete_gyro(&store, Some(&clients)) {
+    if gyro_service::delete_gyro(&store, Some(&clients)).await {
         HttpResponse::Ok().json(serde_json::json!({
             "message": "Success to delete Gyro live tracking."
         }))
@@ -145,10 +145,10 @@ pub async fn delete_gyro(
 /// ==== CONFIG SECTION ====
 /// GET CONFIG
 pub async fn get_config(store: web::Data<GyroStore>) -> impl Responder {
-    match gyro_service::get_gyro(&store) {
+    match gyro_service::get_gyro(&store).await {
         Some(gyro) => HttpResponse::Ok().json(serde_json::json!({
             "message": "Config retrieved successfully.",
-            "data": gyro.config // langsung kirim config
+            "data": gyro.config
         })),
         None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "Gyro Data not found"
@@ -159,46 +159,52 @@ pub async fn get_config(store: web::Data<GyroStore>) -> impl Responder {
 /// PATCH CONFIG
 pub async fn update_config(
     store: web::Data<GyroStore>,
-    data: web::Json<UpdateConfigRequest>,
+    data: web::Json<GyroConfigPatch>,
 ) -> impl Responder {
-    let mut changed = false;
     let cfg_patch = data.into_inner();
+    let mut changed_flag = false;
 
     let result = gyro_service::update_gyro(
         &store,
-        |gyro| {
-            if let Some(ip) = cfg_patch.ip {
-                gyro.config.ip = ip;
-                changed = true;
-            }
-            if let Some(port) = cfg_patch.port {
-                gyro.config.port = port;
-                changed = true;
-            }
-            if let Some(username) = cfg_patch.username {
-                gyro.config.username = username;
-                changed = true;
-            }
-            if let Some(password) = cfg_patch.password {
-                gyro.config.password = password;
-                changed = true;
-            }
-            if let Some(rate) = cfg_patch.update_rate {
-                gyro.config.update_rate = rate;
-                changed = true;
-            }
-            if let Some(topics) = cfg_patch.topics {
-                gyro.config.topics = topics;
-                changed = true;
+        {
+            move |gyro| {
+                let mut changed = false;
+                if let Some(ip) = cfg_patch.ip {
+                    gyro.config.ip = ip;
+                    changed = true;
+                }
+                if let Some(port) = cfg_patch.port {
+                    gyro.config.port = port;
+                    changed = true;
+                }
+                if let Some(username) = cfg_patch.username {
+                    gyro.config.username = username;
+                    changed = true;
+                }
+                if let Some(password) = cfg_patch.password {
+                    gyro.config.password = password;
+                    changed = true;
+                }
+                if let Some(rate) = cfg_patch.update_rate {
+                    gyro.config.update_rate = rate;
+                    changed = true;
+                }
+                if let Some(topics) = cfg_patch.topics {
+                    gyro.config.topics = topics;
+                    changed = true;
+                }
+                if changed {
+                    changed_flag = true;
+                }
             }
         },
         None,
         None,
-    );
+    ).await;
 
     match result {
         Some(gyro) => {
-            if !changed {
+            if !changed_flag {
                 return HttpResponse::Ok().json(serde_json::json!({
                     "message": "Nothing changed",
                     "data": gyro.config
@@ -220,18 +226,11 @@ pub async fn delete_config(store: web::Data<GyroStore>) -> impl Responder {
     let result = gyro_service::update_gyro(
         &store,
         |gyro| {
-            gyro.config = GyroConfig {
-                ip: "127.0.0.1".to_string(),
-                port: 1883,
-                username: "guest".to_string(),
-                password: "guest".to_string(),
-                update_rate: 1000,
-                topics: vec!["gyro/default".to_string()],
-            };
+            gyro.config = GyroConfig::default();
         },
         None,
         None,
-    );
+    ).await;
 
     match result {
         Some(gyro) => HttpResponse::Ok().json(serde_json::json!({

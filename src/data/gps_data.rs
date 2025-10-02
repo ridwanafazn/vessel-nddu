@@ -3,8 +3,8 @@ use chrono::{Utc, DateTime};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Shared GPS Store (async safe)
 pub type GPSStore = Arc<Mutex<Option<GPSData>>>;
-
 
 /// Konfigurasi GPS (tidak keluar di API karena di-skip)
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -22,11 +22,11 @@ pub struct GPSConfig {
 pub struct GPSRequest {
     pub latitude: f64,
     pub longitude: f64,
-    pub sog: f64,                   // speed over ground (knot)
-    pub cog: f64,                   // course over ground (derajat)
-    pub update_rate: Option<u64>,   // opsional, default 1000
+    pub sog: f64,                // speed over ground (knot)
+    pub cog: f64,                // course over ground (derajat)
+    pub update_rate: Option<u64>,// opsional, default 1000
     pub is_running: bool,
-    pub variation: Option<f64>,     // magnetic variation
+    pub variation: Option<f64>,  // magnetic variation
 }
 
 /// Data GPS yang disimpan di store
@@ -130,4 +130,3 @@ impl From<&GPSData> for GPSResponse {
         }
     }
 }
-

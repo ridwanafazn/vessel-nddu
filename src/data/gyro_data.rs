@@ -3,6 +3,7 @@ use chrono::{Utc, DateTime};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Shared Gyro Store (async safe)
 pub type GyroStore = Arc<Mutex<Option<GyroData>>>;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -11,17 +12,17 @@ pub struct GyroConfig {
     pub port: u16,
     pub username: String,
     pub password: String,
-    pub update_rate: u64, 
-    pub topics: Vec<String>, 
+    pub update_rate: u64,
+    pub topics: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GyroRequest {
-    pub heading_true: f64,          // derajat
-    pub pitch: f64,                 // derajat
-    pub roll: f64,                  // derajat
-    pub heading_rate: f64,          // derajat per detik
-    pub update_rate: Option<u64>,   // default 1000
+    pub heading_true: f64,    // derajat
+    pub pitch: f64,           // derajat
+    pub roll: f64,            // derajat
+    pub heading_rate: f64,    // derajat per detik
+    pub update_rate: Option<u64>, // default 1000
     pub is_running: bool,
 }
 
