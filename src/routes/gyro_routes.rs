@@ -10,7 +10,7 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .route("", web::get().to(gyro_controller::get_gyro))
             .route("", web::patch().to(gyro_controller::update_gyro))
             .route("", web::delete().to(gyro_controller::delete_gyro))
-            // Config CRUD (nested under /api/gyro/config)
+            // Config endpoints
             .service(
                 web::scope("/config")
                     .route("", web::get().to(gyro_controller::get_config))

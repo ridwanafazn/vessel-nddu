@@ -1,131 +1,136 @@
-use crate::data::gyro_data::GyroData;
-use crate::utils::gyro_calculate::update_gyro_data;
-use crate::utils::net::{dispatch_gyro, Clients};
+use tokio::net::TcpStream;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_tungstenite::{accept_async, tungstenite::Message};
+use futures_util::{SinkExt, StreamExt};
+use tokio::sync::{mpsc, Mutex};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio_tungstenite::tungstenite::Message;
-use tokio::time::{sleep, Duration};
+use serde_json::json;
+use chrono::Utc;
+
+use crate::data::gyro_data::{GyroData, GyroResponse, GyroStore, GyroRequest};
+use crate::utils::mqtt::publish_gyro_mqtt;
 use rumqttc::AsyncClient;
 
-/// Tipe untuk menyimpan Gyro saat ini
-pub type GyroStore = Arc<Mutex<Option<GyroData>>>;
+/// Type alias untuk WebSocket clients
+pub type Tx = mpsc::UnboundedSender<Message>;
+pub type Clients = Arc<Mutex<Vec<Tx>>>;
 
-/// ===== CRUD Gyro =====
-pub async fn create_gyro(
-    store: &GyroStore,
-    data: GyroData,
-    clients: Option<&Clients>,
-    mqtt: Option<&AsyncClient>,
-) {
-    let gyro = update_gyro_data(data);
+/// ==== GYRO SERVICE STRUCT ====
 
-    {
-        let mut lock = store.lock().await;
-        *lock = Some(gyro.clone());
+/// Inisialisasi store gyro kosong
+pub fn init_gyro_store() -> GyroStore {
+    Arc::new(Mutex::new(Some(GyroData::default())))
+}
+
+/// Ambil data gyro terakhir
+pub async fn get_latest(store: &GyroStore) -> Option<GyroData> {
+    store.lock().await.clone()
+}
+
+/// Update data gyro dari request baru
+pub async fn update_data(store: &GyroStore, req: GyroRequest) -> GyroData {
+    let mut gyro = GyroData::from(req);
+    gyro.last_update = Utc::now();
+
+    let mut guard = store.lock().await;
+    *guard = Some(gyro.clone());
+    gyro
+}
+
+/// Update konfigurasi gyro (misalnya MQTT, rate, dll)
+pub async fn update_config(store: &GyroStore, new_config: &crate::data::gyro_data::GyroConfig) {
+    let mut guard = store.lock().await;
+    if let Some(ref mut gyro) = *guard {
+        gyro.config = new_config.clone();
     }
+}
 
-    if let Some(clients) = clients {
-        let mqtt = mqtt.cloned();
-        let gyro_clone = gyro.clone();
+/// ==== HELPER: Broadcast JSON ke semua WebSocket client ====
+async fn broadcast_json(clients: &Clients, message: Message) {
+    let clients_lock = clients.lock().await;
+    for client in clients_lock.iter() {
+        let _ = client.send(message.clone());
+    }
+}
+
+/// ==== GYRO SECTION ====
+
+/// Kirim data Gyro ke semua WebSocket client
+pub async fn broadcast_gyro(clients: &Clients, gyro: &GyroData) {
+    let resp = GyroResponse::from(gyro.clone());
+    let message = Message::Text(
+        json!({
+            "type": "gyro_update",
+            "data": resp
+        })
+        .to_string(),
+    );
+    broadcast_json(clients, Message::Text(message)).await;
+}
+
+/// Dispatch data Gyro ke WebSocket dan MQTT
+pub async fn dispatch_gyro(clients: &Clients, gyro: &GyroData, mqtt: Option<&AsyncClient>) {
+    // 1️⃣ Kirim ke WebSocket client
+    broadcast_gyro(clients, gyro).await;
+
+    // 2️⃣ Publish ke MQTT global
+    if let Some(client) = mqtt {
+        if let Err(e) = publish_gyro_mqtt(client, gyro).await {
+            eprintln!("[Gyro MQTT] Publish error: {:?}", e);
+        }
+    }
+}
+
+/// ==== WEBSOCKET HANDLER ====
+
+/// Menerima koneksi WebSocket (biasanya untuk dashboard)
+pub async fn handle_websocket_connection(stream: TcpStream, clients: Clients) {
+    if let Ok(ws_stream) = accept_async(stream).await {
+        let (mut write, mut read) = ws_stream.split();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+
+        // Simpan TX channel client baru
+        {
+            let mut clients_lock = clients.lock().await;
+            clients_lock.push(tx);
+        }
+
         let clients_clone = clients.clone();
+
+        // Task untuk mengirim data ke client
         tokio::spawn(async move {
-            dispatch_gyro(&clients_clone, &gyro_clone, mqtt.as_ref()).await;
+            while let Some(msg) = rx.recv().await {
+                if write.send(msg).await.is_err() {
+                    break;
+                }
+            }
+
+            // Hapus client yang sudah tutup
+            let mut clients_lock = clients_clone.lock().await;
+            clients_lock.retain(|c| !c.is_closed());
         });
-    }
-}
 
-pub async fn get_gyro(store: &GyroStore) -> Option<GyroData> {
-    let lock = store.lock().await;
-    lock.clone()
-}
-
-pub async fn update_gyro(
-    store: &GyroStore,
-    update_fn: impl FnOnce(&mut GyroData) + Send + 'static,
-    clients: Option<&Clients>,
-    mqtt: Option<&AsyncClient>,
-) -> Option<GyroData> {
-    let mut lock = store.lock().await;
-    if let Some(ref mut gyro) = *lock {
-        update_fn(gyro);
-        let updated = update_gyro_data(gyro.clone());
-        *gyro = updated.clone();
-
-        if let Some(clients) = clients {
-            let mqtt = mqtt.cloned();
-            let gyro_clone = updated.clone();
-            let clients_clone = clients.clone();
-            tokio::spawn(async move {
-                dispatch_gyro(&clients_clone, &gyro_clone, mqtt.as_ref()).await;
-            });
-        }
-
-        Some(updated)
-    } else {
-        None
-    }
-}
-
-pub async fn delete_gyro(store: &GyroStore, clients: Option<&Clients>) -> bool {
-    let mut lock = store.lock().await;
-    if lock.is_some() {
-        // Hapus data gyro
-        *lock = None;
-
-        // Broadcast ke semua client WebSocket
-        if let Some(clients) = clients {
-            let msg = Message::Text(
-                r#"{"type": "gyro_delete", "message": "Success to delete Gyro live tracking."}"#
-                    .to_string()
-                    .into(),
-            );
-
-            let clients_lock = clients.lock().await;
-            for client in clients_lock.iter() {
-                if let Err(e) = client.send(msg.clone()) {
-                    eprintln!("Failed to send message to client: {:?}", e);
+        // Task untuk menerima pesan dari client
+        while let Some(message) = read.next().await {
+            match message {
+                Ok(Message::Text(text)) => {
+                    // echo balik ke semua client
+                    broadcast_json(&clients, Message::Text(text.clone())).await;
                 }
+                Err(_) => break,
+                _ => {}
             }
         }
-        true
-    } else {
-        false
     }
 }
 
-/// ===== Streaming Gyro periodik =====
-pub fn start_gyro_stream(store: GyroStore, clients: Clients, mqtt: Option<AsyncClient>) {
-    tokio::spawn(async move {
-        loop {
-            let gyro_opt = {
-                let lock = store.lock().await;
-                lock.clone()
-            };
-
-            if let Some(mut gyro) = gyro_opt {
-                if gyro.is_running {
-                    gyro = update_gyro_data(gyro.clone());
-
-                    {
-                        let mut lock = store.lock().await;
-                        *lock = Some(gyro.clone());
-                    }
-
-                    let gyro_clone = gyro.clone();
-                    let clients_clone = clients.clone();
-                    let mqtt_clone = mqtt.clone();
-                    tokio::spawn(async move {
-                        dispatch_gyro(&clients_clone, &gyro_clone, mqtt_clone.as_ref()).await;
-                    });
-
-                    let wait_ms = if gyro.update_rate == 0 { 1000 } else { gyro.update_rate };
-                    sleep(Duration::from_millis(wait_ms)).await;
-                } else {
-                    sleep(Duration::from_millis(500)).await;
-                }
-            } else {
-                sleep(Duration::from_millis(500)).await;
-            }
+/// ==== TCP HANDLER (debug only) ====
+pub async fn handle_tcp_connection(mut socket: TcpStream) {
+    let mut buffer = [0; 1024];
+    match socket.read(&mut buffer).await {
+        Ok(n) if n > 0 => {
+            let _ = socket.write_all(b"Gyro TCP received").await;
         }
-    });
+        _ => {}
+    }
 }

@@ -2,16 +2,17 @@ use actix_web::{web, HttpResponse, Responder};
 use crate::data::gyro_data::{GyroData, GyroRequest, GyroResponse, GyroConfig};
 use crate::services::gyro_service::{self, GyroStore};
 use crate::utils::net::Clients;
+use crate::utils::mqtt;
 
 /// ==== GYRO SECTION ====
 
-// PATCH GYRO Request
+// PATCH GYRO Request (sekarang memakai yaw / yaw_rate)
 #[derive(serde::Deserialize)]
 pub struct UpdateGyroRequest {
-    pub heading_true: Option<f64>,
+    pub yaw: Option<f64>,
     pub pitch: Option<f64>,
     pub roll: Option<f64>,
-    pub heading_rate: Option<f64>,
+    pub yaw_rate: Option<f64>,
     pub is_running: Option<bool>,
 }
 
@@ -26,7 +27,6 @@ pub struct GyroConfigPatch {
     pub topics: Option<Vec<String>>,
 }
 
-/// CREATE GYRO
 pub async fn create_gyro(
     store: web::Data<GyroStore>,
     clients: web::Data<Clients>,
@@ -36,7 +36,6 @@ pub async fn create_gyro(
 
     gyro_service::create_gyro(&store, gyro.clone(), Some(&clients), None).await;
     if gyro.is_running {
-        // fungsi ini sync, jangan pakai await
         gyro_service::start_gyro_stream(store.get_ref().clone(), clients.get_ref().clone(), None);
     }
 
@@ -46,7 +45,6 @@ pub async fn create_gyro(
     }))
 }
 
-/// GET GYRO
 pub async fn get_gyro(store: web::Data<GyroStore>) -> impl Responder {
     match gyro_service::get_gyro(&store).await {
         Some(gyro) => HttpResponse::Ok().json(serde_json::json!({
@@ -59,7 +57,6 @@ pub async fn get_gyro(store: web::Data<GyroStore>) -> impl Responder {
     }
 }
 
-/// UPDATE GYRO (PATCH)
 pub async fn update_gyro(
     store: web::Data<GyroStore>,
     clients: web::Data<Clients>,
@@ -73,8 +70,8 @@ pub async fn update_gyro(
         {
             move |gyro| {
                 let mut changed = false;
-                if let Some(heading) = patch.heading_true {
-                    gyro.heading_true = heading;
+                if let Some(yaw) = patch.yaw {
+                    gyro.yaw = yaw;
                     changed = true;
                 }
                 if let Some(pitch) = patch.pitch {
@@ -85,8 +82,8 @@ pub async fn update_gyro(
                     gyro.roll = roll;
                     changed = true;
                 }
-                if let Some(rate) = patch.heading_rate {
-                    gyro.heading_rate = rate;
+                if let Some(rate) = patch.yaw_rate {
+                    gyro.yaw_rate = rate;
                     changed = true;
                 }
                 if let Some(running) = patch.is_running {
@@ -126,7 +123,6 @@ pub async fn update_gyro(
     }
 }
 
-/// DELETE GYRO
 pub async fn delete_gyro(
     store: web::Data<GyroStore>,
     clients: web::Data<Clients>,
@@ -143,7 +139,6 @@ pub async fn delete_gyro(
 }
 
 /// ==== CONFIG SECTION ====
-/// GET CONFIG
 pub async fn get_config(store: web::Data<GyroStore>) -> impl Responder {
     match gyro_service::get_gyro(&store).await {
         Some(gyro) => HttpResponse::Ok().json(serde_json::json!({
@@ -156,7 +151,6 @@ pub async fn get_config(store: web::Data<GyroStore>) -> impl Responder {
     }
 }
 
-/// PATCH CONFIG
 pub async fn update_config(
     store: web::Data<GyroStore>,
     data: web::Json<GyroConfigPatch>,
@@ -210,6 +204,12 @@ pub async fn update_config(
                     "data": gyro.config
                 }));
             }
+
+            match mqtt::reconnect_if_needed(&gyro.config).await {
+                Ok(_) => tracing::info!("MQTT reconnect succeeded with new gyro config"),
+                Err(e) => eprintln!("[MQTT] reconnect failed after gyro config patch: {:?}", e),
+            }
+
             HttpResponse::Created().json(serde_json::json!({
                 "message": "Config updated successfully.",
                 "data": gyro.config
@@ -221,9 +221,8 @@ pub async fn update_config(
     }
 }
 
-/// DELETE CONFIG (reset ke default)
 pub async fn delete_config(store: web::Data<GyroStore>) -> impl Responder {
-    let result = gyro_service::update_gyro(
+    let result = gyro_service::update_config(
         &store,
         |gyro| {
             gyro.config = GyroConfig::default();
@@ -233,10 +232,17 @@ pub async fn delete_config(store: web::Data<GyroStore>) -> impl Responder {
     ).await;
 
     match result {
-        Some(gyro) => HttpResponse::Ok().json(serde_json::json!({
-            "message": "Config reset successfully.",
-            "data": gyro.config
-        })),
+        Some(gyro) => {
+            match mqtt::reconnect_if_needed(&gyro.config).await {
+                Ok(_) => tracing::info!("MQTT reconnected to default config for gyro"),
+                Err(e) => eprintln!("[MQTT] reconnect failed after gyro config reset: {:?}", e),
+            }
+
+            HttpResponse::Ok().json(serde_json::json!({
+                "message": "Config reset successfully.",
+                "data": gyro.config
+            }))
+        }
         None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "Gyro Data not found"
         })),

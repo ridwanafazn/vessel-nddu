@@ -1,10 +1,10 @@
 use crate::data::gps_data::GPSData;
-use world_magnetic_model::GeomagneticField;
-use uom::si::angle::degree;
-use uom::si::length::meter;
-use uom::si::f32::*;
-use time::Date;
 use std::f64::consts::PI;
+use time::Date;
+use uom::si::angle::degree;
+use uom::si::f32::*;
+use uom::si::length::meter;
+use world_magnetic_model::GeomagneticField;
 
 /// Radius bumi dalam meter
 const EARTH_RADIUS: f64 = 6_371_000.0;
@@ -43,42 +43,48 @@ fn clamp_speed(speed: f64) -> f64 {
 
 /// Hitung posisi baru berdasarkan kecepatan (sog, knot) dan arah (cog, derajat)
 /// update_rate dalam milisecond
+/// **FUNGSI INI TELAH DIPERBAIKI**
 pub fn calculate_new_position(data: &mut GPSData) -> (f64, f64) {
-    let mut lat = data.latitude;
-    let mut lon = data.longitude;
-    let mut course = data.cog;
+    let lat_rad = deg_to_rad(data.latitude);
+    let lon_rad = deg_to_rad(data.longitude);
+    let course_rad = deg_to_rad(data.cog);
 
-    // konversi speed dari knot ke meter/detik
+    // Konversi speed dari knot ke meter/detik
     let speed_mps = data.sog * 0.514444;
     let distance = speed_mps * (data.update_rate as f64 / 1000.0); // ms -> s
 
-    // Delta linear pada sumbu latitude dan longitude
-    let course_rad = deg_to_rad(course);
-    let delta_lat = distance / EARTH_RADIUS * course_rad.cos();
-    let delta_lon = if lat.abs() < 90.0 {
-        distance / (EARTH_RADIUS * deg_to_rad(lat).cos()) * course_rad.sin()
-    } else {
-        0.0
-    };
+    // Hitung jarak angular
+    let angular_distance = distance / EARTH_RADIUS;
 
-    // Tambah delta ke posisi saat ini
-    lat += rad_to_deg(delta_lat);
-    lon += rad_to_deg(delta_lon);
+    // === PERBAIKAN: Menggunakan rumus Haversine untuk menghitung posisi baru ===
+    // Rumus ini akurat secara matematis untuk permukaan bola.
+    let new_lat_rad = (lat_rad.sin() * angular_distance.cos()
+        + lat_rad.cos() * angular_distance.sin() * course_rad.cos())
+    .asin();
 
-    // Pantulan di kutub
-    if lat > 90.0 {
-        lat = 180.0 - lat;
-        course = normalize_course(course + 180.0);
-    } else if lat < -90.0 {
-        lat = -180.0 - lat;
-        course = normalize_course(course + 180.0);
+    let new_lon_rad = lon_rad
+        + (course_rad.sin() * angular_distance.sin() * lat_rad.cos())
+            .atan2(angular_distance.cos() - lat_rad.sin() * new_lat_rad.sin());
+
+    let mut new_lat = rad_to_deg(new_lat_rad);
+    let mut new_lon = rad_to_deg(new_lon_rad);
+
+    // Clamp latitude ke rentang valid [-90, 90]
+    if new_lat > 90.0 {
+        new_lat = 90.0;
+    } else if new_lat < -90.0 {
+        new_lat = -90.0;
     }
 
     // Normalisasi longitude ke [-180, 180]
-    lon = ((lon + 180.0).rem_euclid(360.0)) - 180.0;
+    new_lon = (new_lon + 180.0).rem_euclid(360.0) - 180.0;
 
-    data.cog = course;
-    (lat, lon)
+    // === DIHAPUS: Logika pantulan kutub tidak lagi diperlukan dengan rumus Haversine ===
+    // Rumus Haversine secara alami menangani pergerakan di dekat kutub.
+
+    // data.cog tidak perlu diubah di sini karena COG adalah arah gerak,
+    // yang diasumsikan konstan selama interval waktu kecil ini.
+    (new_lat, new_lon)
 }
 
 /// Update field last_update dengan timestamp UTC saat ini

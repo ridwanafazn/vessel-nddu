@@ -24,7 +24,6 @@ pub struct GPSRequest {
     pub longitude: f64,
     pub sog: f64,                // speed over ground (knot)
     pub cog: f64,                // course over ground (derajat)
-    pub update_rate: Option<u64>,// opsional, default 1000
     pub is_running: bool,
     pub variation: Option<f64>,  // magnetic variation
 }
@@ -36,7 +35,6 @@ pub struct GPSData {
     pub longitude: f64,
     pub sog: f64,
     pub cog: f64,
-    pub update_rate: u64,
     pub is_running: bool,
     pub variation: Option<f64>,
     pub last_update: DateTime<Utc>,
@@ -52,7 +50,6 @@ impl Default for GPSData {
             longitude: 0.0,
             sog: 0.0,
             cog: 0.0,
-            update_rate: 1000,
             is_running: false,
             variation: None,
             last_update: Utc::now(),

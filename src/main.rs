@@ -14,10 +14,13 @@ use tokio::net::TcpListener;
 use crate::utils::{handle_websocket_connection, handle_tcp_connection, Clients};
 use crate::services::gps_service::{GPSStore, start_gps_stream};
 use crate::services::gyro_service::{GyroStore, start_gyro_stream};
+
+use tracing_subscriber;
 use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    tracing_subscriber::fmt::init();
     // Shared state
     let gps_store: GPSStore = Arc::new(Mutex::new(None));
     let gps_store_data = web::Data::new(gps_store.clone());
