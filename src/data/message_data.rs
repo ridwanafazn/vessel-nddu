@@ -1,8 +1,8 @@
 use serde::{Serialize, Deserialize};
-use crate::data::gps_data::GPSData;
+use crate::data::gps_data::GpsState;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MessageData {
     pub message: String,
-    pub data: GPSData,
+    pub data: GpsState,
 }

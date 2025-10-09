@@ -1,20 +1,20 @@
-use serde::{Serialize, Deserialize};
-use chrono::{Utc, DateTime};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock};
 
-/// Shared Gyro Store (async safe)
-pub type GyroStore = Arc<Mutex<Option<GyroData>>>;
+pub type SharedGyroState = Arc<RwLock<Option<GyroState>>>;
+pub type SharedGyroConfig = Arc<RwLock<GyroConfig>>;
 
 /// Konfigurasi koneksi dan publikasi Gyro
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
 pub struct GyroConfig {
-    pub ip: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-    pub update_rate: u64,
-    pub topics: Vec<String>,
+    pub ip: Option<String>,
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    pub update_rate: Option<u64>,
+    pub topics: Option<Vec<String>>,
 }
 
 /// Request dari API untuk update data gyro
@@ -97,7 +97,6 @@ pub struct GyroResponse {
     pub roll: f64,
     pub yaw_rate: f64,
     pub is_running: bool,
-    pub last_update: DateTime<Utc>,
 }
 
 impl From<GyroData> for GyroResponse {

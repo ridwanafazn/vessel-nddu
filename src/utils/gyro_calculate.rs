@@ -15,15 +15,8 @@ fn normalize_yaw(mut yaw: f64) -> f64 {
     yaw
 }
 
-/// Clamp nilai ke rentang tertentu
 fn clamp(value: f64, min: f64, max: f64) -> f64 {
-    if value < min {
-        min
-    } else if value > max {
-        max
-    } else {
-        value
-    }
+    value.max(min).min(max)
 }
 
 /// Update field last_update dengan timestamp UTC saat ini

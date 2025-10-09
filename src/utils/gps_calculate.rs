@@ -6,16 +6,13 @@ use uom::si::f32::*;
 use uom::si::length::meter;
 use world_magnetic_model::GeomagneticField;
 
-/// Radius bumi dalam meter
 const EARTH_RADIUS: f64 = 6_371_000.0;
 
-/// Konversi derajat ke radian
-pub fn deg_to_rad(deg: f64) -> f64 {
+fn deg_to_rad(deg: f64) -> f64 {
     deg * PI / 180.0
 }
 
-/// Konversi radian ke derajat
-pub fn rad_to_deg(rad: f64) -> f64 {
+fn rad_to_deg(rad: f64) -> f64 {
     rad * 180.0 / PI
 }
 
@@ -98,11 +95,6 @@ pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_str: &str) -> f64 {
         Ok(dt) => dt,
         Err(_) => time::OffsetDateTime::now_utc(),
     };
-    let year = datetime.year().clamp(2020, 2029);
-    let month = datetime.month();
-    let day = datetime.day();
-    let date = Date::from_calendar_date(year, month, day)
-        .unwrap_or(Date::from_calendar_date(2025, month, day).unwrap());
 
     let height_q = Length::new::<meter>(0.0);
     let lat_q = Angle::new::<degree>(lat as f32);
@@ -114,26 +106,23 @@ pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_str: &str) -> f64 {
     }
 }
 
-/// Fungsi utama update GPS untuk simulasi
-pub fn update_gps_data(mut data: GPSData) -> GPSData {
-    // Normalisasi input dulu
-    data.cog = normalize_course(data.cog);
-    data.sog = clamp_speed(data.sog);
+pub fn calculate_next_gps_state(state: &mut GpsState) {
+    let dt_seconds = state.calculation_rate_ms as f64 / 1000.0;
+    let speed_mps = state.sog * 0.514444;
+    let distance = speed_mps * dt_seconds;
 
-    // Hitung posisi baru
-    let (new_lat, new_lon) = calculate_new_position(&mut data);
-    data.latitude = new_lat;
-    data.longitude = new_lon;
+    let lat_rad = deg_to_rad(state.latitude);
+    let lon_rad = deg_to_rad(state.longitude);
+    let course_rad = deg_to_rad(state.cog);
+    let angular_distance = distance / EARTH_RADIUS;
 
-    // Update waktu
-    update_last_update_time(&mut data);
+    let new_lat_rad = (lat_rad.sin() * angular_distance.cos()
+        + lat_rad.cos() * angular_distance.sin() * course_rad.cos())
+    .asin();
 
-    // Hitung magnetic variation baru
-    data.variation = Some(calculate_magnetic_variation(
-        data.latitude,
-        data.longitude,
-        &data.last_update.to_rfc3339(),
-    ));
+    let new_lon_rad = lon_rad
+        + (course_rad.sin() * angular_distance.sin() * lat_rad.cos())
+            .atan2(angular_distance.cos() - lat_rad.sin() * new_lat_rad.sin());
 
     data
 }
