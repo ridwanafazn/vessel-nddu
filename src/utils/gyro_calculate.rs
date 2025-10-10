@@ -1,70 +1,33 @@
-use crate::data::gyro_data::GyroData;
-// PERBAIKAN: Tambahkan `use` untuk thread_rng
-use rand::{thread_rng, Rng}; 
+use crate::data::gyro_data::GyroState;
+use chrono::Utc;
+use rand::thread_rng;
 use rand_distr::{Distribution, Normal};
 use std::f64::consts::PI;
 
-/// Normalisasi yaw ke [0, 360)
-fn normalize_yaw(mut yaw: f64) -> f64 {
-    while yaw < 0.0 {
-        yaw += 360.0;
-    }
-    while yaw >= 360.0 {
-        yaw -= 360.0;
-    }
-    yaw
+fn normalize_yaw(yaw: f64) -> f64 {
+    (yaw % 360.0 + 360.0) % 360.0
 }
 
 fn clamp(value: f64, min: f64, max: f64) -> f64 {
     value.max(min).min(max)
 }
 
-/// Update field last_update dengan timestamp UTC saat ini
-fn update_last_update_time(data: &mut GyroData) {
-    data.last_update = chrono::Utc::now();
-}
-
-/// Fungsi utama untuk memperbarui data Gyro (simulasi rotasi & noise)
-/// **FUNGSI INI TELAH DIPERBAIKI**
-pub fn update_gyro_data(mut data: GyroData) -> GyroData {
-    // Δt dalam detik (dari update_rate dalam ms)
-    let dt = data.update_rate as f64 / 1000.0;
-
-    // PERBAIKAN: Menyesuaikan nama variabel untuk konsistensi.
-    // Pastikan field di struct GyroData juga diubah dari `yaw_rate` ke `heading_rate`.
-    let heading_rate = clamp(data.yaw_rate, -50.0, 50.0);
-
-    // Integrasi yaw (rotasi)
-    let mut yaw = data.yaw + heading_rate * dt;
-    yaw = normalize_yaw(yaw);
-    data.yaw = yaw;
-
-    // Simulasi dinamika Pitch & Roll yang realistis
-    let t = chrono::Utc::now().timestamp_millis() as f64 / 1000.0;
-
-    // PERBAIKAN: Menggunakan rand::thread_rng() untuk generator acak yang lebih aman.
-    let mut rng = thread_rng();
+// DIUBAH: Menambahkan atribut #[allow(deprecated)] untuk menyembunyikan warning
+#[allow(deprecated)]
+pub fn calculate_next_gyro_state(state: &mut GyroState) {
+    let dt_seconds = state.calculation_rate_ms as f64 / 1000.0;
+    let new_yaw = state.yaw + state.yaw_rate * dt_seconds;
+    state.yaw = normalize_yaw(new_yaw);
+    let t = Utc::now().timestamp_millis() as f64 / 1000.0;
     
-    // Gaussian noise kecil (stddev 0.05°)
+    // Panggilan ini yang menyebabkan warning, sekarang akan diabaikan oleh compiler.
+    let mut rng = thread_rng();
     let normal = Normal::new(0.0, 0.05).unwrap();
     let noise: f64 = normal.sample(&mut rng);
 
-    // === PERBAIKAN: Logika Pitch & Roll ===
-    // Dihitung sebagai osilasi sinusoidal murni berpusat di nol, bukan integrasi.
-    // Ini mensimulasikan gerakan berayun yang kembali ke posisi setimbang.
-
-    // Roll: osilasi ±2° dengan periode ~8 detik
     let roll_wave = 2.0 * (2.0 * PI * t / 8.0).sin();
-    // Nilai roll di-set langsung, bukan ditambahkan ke nilai sebelumnya.
-    data.roll = clamp(roll_wave + noise, -60.0, 60.0);
-
-    // Pitch: osilasi ±1° dengan periode ~10 detik
+    state.roll = clamp(roll_wave + noise, -60.0, 60.0);
     let pitch_wave = 1.0 * (2.0 * PI * t / 10.0).sin();
-    // Nilai pitch di-set langsung, bukan ditambahkan ke nilai sebelumnya.
-    data.pitch = clamp(pitch_wave + noise, -30.0, 30.0);
-
-    // Perbarui waktu terakhir
-    update_last_update_time(&mut data);
-
-    data
+    state.pitch = clamp(pitch_wave + noise, -30.0, 30.0);
+    state.last_update = Utc::now();
 }

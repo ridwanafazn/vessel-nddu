@@ -2,11 +2,25 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
+// DIUBAH: Dua tipe alias terpisah.
 pub type SharedGyroState = Arc<RwLock<Option<GyroState>>>;
 pub type SharedGyroConfig = Arc<RwLock<GyroConfig>>;
 
-/// Konfigurasi koneksi dan publikasi Gyro
-#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+// DIUBAH: Struct State yang ramping, tanpa config.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct GyroState {
+    pub yaw: f64,
+    pub pitch: f64,
+    pub roll: f64,
+    pub yaw_rate: f64,
+    pub is_running: bool,
+    pub last_update: DateTime<Utc>,
+    #[serde(skip)]
+    pub calculation_rate_ms: u64,
+}
+
+// DIUBAH: Struct Config yang independen dengan field Option<T>.
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GyroConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -17,81 +31,23 @@ pub struct GyroConfig {
     pub topics: Option<Vec<String>>,
 }
 
-/// Request dari API untuk update data gyro
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GyroRequest {
-    /// Sudut arah (yaw) dalam derajat [0–360)
-    pub yaw: f64,
-    /// Sudut pitch dalam derajat [-90–90)
-    pub pitch: f64,
-    /// Sudut roll dalam derajat [-180–180)
-    pub roll: f64,
-    /// Laju perubahan yaw (deg/s)
-    pub yaw_rate: f64,
-    /// Status apakah gyro aktif berjalan
-    pub is_running: bool,
-}
-
-/// Data Gyro aktif yang disimpan dan dikirim
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GyroData {
-    pub yaw: f64,
-    pub pitch: f64,
-    pub roll: f64,
-    pub yaw_rate: f64,
-    pub is_running: bool,
-    pub last_update: DateTime<Utc>,
-
-    /// Disimpan secara lokal untuk kebutuhan MQTT, tidak dikirim ke client
-    #[serde(skip_serializing, skip_deserializing)]
-    pub config: GyroConfig,
-}
-
-impl Default for GyroData {
+// DIUBAH: Default untuk Config adalah semua field bernilai None.
+impl Default for GyroConfig {
     fn default() -> Self {
-        Self {
-            yaw: 0.0,
-            pitch: 0.0,
-            roll: 0.0,
-            yaw_rate: 0.0,
-            is_running: false,
-            last_update: Utc::now(),
-            config: GyroConfig {
-                ip: "127.0.0.1".to_string(),
-                port: 1883,
-                username: "guest".to_string(),
-                password: "guest".to_string(),
-                update_rate: 1000,
-                topics: vec!["gyro/default".to_string()],
-            },
+        GyroConfig {
+            ip: None,
+            port: None,
+            username: None,
+            password: None,
+            update_rate: None,
+            topics: None,
         }
     }
 }
 
-impl From<GyroRequest> for GyroData {
-    fn from(req: GyroRequest) -> Self {
-        GyroData {
-            yaw: req.yaw,
-            pitch: req.pitch,
-            roll: req.roll,
-            yaw_rate: req.yaw_rate,
-            is_running: req.is_running,
-            last_update: Utc::now(),
-            config: GyroConfig {
-                ip: "127.0.0.1".to_string(),
-                port: 1883,
-                username: "guest".to_string(),
-                password: "guest".to_string(),
-                update_rate: req.update_rate.unwrap_or(1000),
-                topics: vec!["gyro/default".to_string()],
-            },
-        }
-    }
-}
-
-/// Response API ke client
-#[derive(Clone, Serialize, Debug)]
-pub struct GyroResponse {
+// Struct Request API.
+#[derive(Deserialize, Debug)]
+pub struct CreateGyroRequest {
     pub yaw: f64,
     pub pitch: f64,
     pub roll: f64,
@@ -99,28 +55,21 @@ pub struct GyroResponse {
     pub is_running: bool,
 }
 
-impl From<GyroData> for GyroResponse {
-    fn from(data: GyroData) -> Self {
-        GyroResponse {
-            yaw: data.yaw,
-            pitch: data.pitch,
-            roll: data.roll,
-            yaw_rate: data.yaw_rate,
-            is_running: data.is_running,
-            last_update: data.last_update,
-        }
-    }
+#[derive(Deserialize, Debug, Default)]
+pub struct UpdateGyroRequest {
+    pub yaw: Option<f64>,
+    pub pitch: Option<f64>,
+    pub roll: Option<f64>,
+    pub yaw_rate: Option<f64>,
+    pub is_running: Option<bool>,
 }
 
-impl From<&GyroData> for GyroResponse {
-    fn from(data: &GyroData) -> Self {
-        GyroResponse {
-            yaw: data.yaw,
-            pitch: data.pitch,
-            roll: data.roll,
-            yaw_rate: data.yaw_rate,
-            is_running: data.is_running,
-            last_update: data.last_update,
-        }
-    }
+#[derive(Deserialize, Debug, Default)]
+pub struct UpdateGyroConfigRequest {
+    pub ip: Option<String>,
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub update_rate: Option<u64>,
+    pub topics: Option<Vec<String>>,
 }

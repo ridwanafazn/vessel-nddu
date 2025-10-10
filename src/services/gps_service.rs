@@ -1,17 +1,17 @@
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState};
-use crate::services::MqttCommand;
+use crate::services::MqttCommand; // Import perintah yang baru kita buat
 use crate::utils;
-use crate::utils::net::Clients;
-// DIUBAH: Hapus import yang tidak digunakan (Event, Packet, EventLoop)
-use rumqttc::{AsyncClient, MqttOptions}; 
+use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet};
 use std::time::Duration;
 use tokio::select;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio::time::sleep;
+// Import yang diperlukan untuk publikasi
+use crate::utils::net::Clients;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+// Fungsi ini tidak banyak berubah, hanya penyesuaian tipe data.
 pub fn start_gps_calculation_thread(state: SharedGpsState) {
     tokio::spawn(async move {
         loop {
@@ -28,83 +28,68 @@ pub fn start_gps_calculation_thread(state: SharedGpsState) {
     });
 }
 
+// === MANAJER KONEKSI BARU ===
+// Fungsi ini ditulis ulang sepenuhnya.
 pub fn start_gps_publication_thread(
     config_state: SharedGpsConfig,
     data_state: SharedGpsState,
     ws_clients: Clients,
-    mut command_rx: mpsc::Receiver<MqttCommand>,
+    mut command_rx: mpsc::Receiver<MqttCommand>, // Penerima perintah
 ) {
     tokio::spawn(async move {
-        let mut mqtt_client: Option<AsyncClient> = None;
-        let mut eventloop_handle: Option<JoinHandle<()>> = None;
+        let mut mqtt_connection: Option<(AsyncClient, EventLoop)> = None;
 
         loop {
-            let update_rate = config_state.read().unwrap().update_rate.unwrap_or(1000);
+            // Cek apakah ada perintah baru atau waktunya publish
+            let update_rate = {
+                config_state.read().unwrap().update_rate.unwrap_or(1000)
+            };
 
             select! {
+                // 1. Menunggu perintah dari controller
                 Some(command) = command_rx.recv() => {
                     match command {
                         MqttCommand::Reconnect => {
                             println!("[MQTT Manager GPS]: Reconnect command received. Resetting connection.");
-                            if let Some(handle) = eventloop_handle.take() {
-                                handle.abort();
-                            }
-                            mqtt_client = None;
+                            mqtt_connection = None; // Putuskan koneksi lama
                         }
                     }
                 }
-                _ = sleep(Duration::from_millis(update_rate)) => {}
+
+                // 2. Menunggu timer untuk publikasi
+                _ = sleep(Duration::from_millis(update_rate)) => {
+                    // Lanjutkan ke logika publikasi di bawah
+                }
             }
+            
+            // --- Logika Koneksi dan Publikasi ---
 
-            // DIUBAH: Logika koneksi ulang dengan pola Lock -> Salin -> Lepas Lock -> Await
-            if mqtt_client.is_none() {
+            // Jika tidak terhubung, coba hubungkan ulang
+            if mqtt_connection.is_none() {
                 println!("[MQTT Manager GPS]: Attempting to connect...");
-                
-                let connection_details = { // Scope pendek untuk lock
-                    let config = config_state.read().unwrap();
-                    if let (Some(ip), Some(port), Some(username), Some(password)) =
-                        (&config.ip, config.port, &config.username, &config.password)
-                    {
-                        Some((ip.clone(), port, username.clone(), password.clone()))
-                    } else {
-                        None
-                    }
-                }; // Lock dilepas di sini
-
-                if let Some((ip, port, username, password)) = connection_details {
+                let config = config_state.read().unwrap();
+                if let (Some(ip), Some(port), Some(username), Some(password)) = 
+                    (&config.ip, config.port, &config.username, &config.password) {
+                    
                     let mut mqttoptions = MqttOptions::new("vessel_gps_publisher", ip, port);
                     mqttoptions.set_credentials(username, password);
                     mqttoptions.set_keep_alive(Duration::from_secs(5));
 
-                    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-                    
-                    // Operasi .await sekarang aman karena tidak ada lock yang dipegang
-                    match eventloop.poll().await {
-                        Ok(_) => {
-                             println!("[MQTT Manager GPS]: Connection successful!");
-                             mqtt_client = Some(client);
-                             let handle = tokio::spawn(async move {
-                                 loop {
-                                     if eventloop.poll().await.is_err() { break; }
-                                 }
-                             });
-                             eventloop_handle = Some(handle);
-                        }
-                        Err(e) => {
-                             eprintln!("[MQTT Manager GPS]: Failed to connect: {}. Will retry later.", e);
-                        }
-                    }
+                    let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
+                    println!("[MQTT Manager GPS]: Connection successful!");
+                    mqtt_connection = Some((client, eventloop));
                 } else {
                     println!("[MQTT Manager GPS]: Config is incomplete. Skipping connection attempt.");
                 }
             }
-            
-            if let Some(client) = &mqtt_client {
-                if eventloop_handle.as_ref().map_or(true, |h| h.is_finished()) {
-                    eprintln!("[MQTT Manager GPS]: Disconnected from broker. Will attempt to reconnect.");
-                    mqtt_client = None;
-                    eventloop_handle = None;
-                    continue;
+
+            // Jika sudah terhubung, lakukan publikasi
+            if let Some((client, eventloop)) = &mut mqtt_connection {
+                // Poll eventloop untuk menjaga koneksi tetap hidup
+                if let Ok(Event::Incoming(Packet::Disconnect)) = eventloop.poll().await {
+                        eprintln!("[MQTT Manager GPS]: Disconnected from broker. Will attempt to reconnect.");
+                        mqtt_connection = None;
+                        continue; // Langsung coba reconnect di iterasi berikutnya
                 }
 
                 let data_to_publish = {

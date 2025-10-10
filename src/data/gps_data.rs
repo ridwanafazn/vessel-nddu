@@ -2,32 +2,26 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 
+// DIUBAH: Sekarang ada dua tipe alias terpisah untuk State dan Config.
 pub type SharedGpsState = Arc<RwLock<Option<GpsState>>>;
 pub type SharedGpsConfig = Arc<RwLock<GpsConfig>>;
 
+// DIUBAH: Struct ini sekarang ramping dan HANYA berisi data sensor.
+// Field `config` telah dihapus.
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GPSRequest {
-    pub latitude: f64,
-    pub longitude: f64,
-    pub sog: f64,                // speed over ground (knot)
-    pub cog: f64,                // course over ground (derajat)
-    pub is_running: bool,
-    pub variation: Option<f64>,  // magnetic variation
-}
-
-/// Data GPS yang disimpan di store
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GPSData {
+pub struct GpsState {
     pub latitude: f64,
     pub longitude: f64,
     pub sog: f64,
     pub cog: f64,
+    pub variation: f64,
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     #[serde(skip)]
     pub calculation_rate_ms: u64,
 }
 
+// DIUBAH: Struct ini sekarang independen dan semua field-nya adalah Option<T>.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GpsConfig {
     pub ip: Option<String>,
@@ -39,27 +33,22 @@ pub struct GpsConfig {
     pub topics: Option<Vec<String>>,
 }
 
+// DIUBAH: Default untuk Config sekarang adalah semua field bernilai None.
 impl Default for GpsConfig {
     fn default() -> Self {
-        Self {
-            latitude: 0.0,
-            longitude: 0.0,
-            sog: 0.0,
-            cog: 0.0,
-            is_running: false,
-            variation: None,
-            last_update: Utc::now(),
-            config: GPSConfig {
-                ip: "127.0.0.1".to_string(),
-                port: 1883,
-                username: "guest".to_string(),
-                password: "guest".to_string(),
-                update_rate: 1000,
-                topics: vec!["gps/default".to_string()],
-            },
+        GpsConfig {
+            ip: None,
+            port: None,
+            username: None,
+            password: None,
+            update_rate: None,
+            topics: None,
         }
     }
 }
+
+// Struct untuk request API di bawah ini sebagian besar tetap sama,
+// karena sudah dirancang dengan baik.
 
 #[derive(Deserialize, Debug)]
 pub struct CreateGpsRequest {

@@ -1,6 +1,7 @@
-use crate::data::gps_data::GPSData;
+use crate::data::gps_data::GpsState;
+use chrono::{Datelike, Utc}; // Menggunakan trait Datelike dari chrono
 use std::f64::consts::PI;
-use time::Date;
+use time::{Date, Month}; // Mengimpor Month dari time
 use uom::si::angle::degree;
 use uom::si::f32::*;
 use uom::si::length::meter;
@@ -16,84 +17,19 @@ fn rad_to_deg(rad: f64) -> f64 {
     rad * 180.0 / PI
 }
 
-/// Normalisasi nilai heading/course ke [0, 360)
-fn normalize_course(mut course: f64) -> f64 {
-    while course < 0.0 {
-        course += 360.0;
-    }
-    while course >= 360.0 {
-        course -= 360.0;
-    }
-    course
-}
+// DIUBAH: Dibuat `pub` agar bisa diakses controller. Logika tanggal diperbaiki.
+pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &chrono::DateTime<Utc>) -> f64 {
+    // Konversi u32 month dari chrono ke enum Month dari time
+    let month = match Month::try_from(date_time.month() as u8) {
+        Ok(m) => m,
+        Err(_) => return 0.0, // Return default jika konversi gagal
+    };
+    // Konversi u32 day dari chrono ke u8
+    let day = date_time.day() as u8;
 
-/// Clamp kecepatan ke batas 0..102.2 knot
-fn clamp_speed(speed: f64) -> f64 {
-    if speed < 0.0 {
-        0.0
-    } else if speed > 102.2 {
-        102.2
-    } else {
-        speed
-    }
-}
-
-/// Hitung posisi baru berdasarkan kecepatan (sog, knot) dan arah (cog, derajat)
-/// update_rate dalam milisecond
-/// **FUNGSI INI TELAH DIPERBAIKI**
-pub fn calculate_new_position(data: &mut GPSData) -> (f64, f64) {
-    let lat_rad = deg_to_rad(data.latitude);
-    let lon_rad = deg_to_rad(data.longitude);
-    let course_rad = deg_to_rad(data.cog);
-
-    // Konversi speed dari knot ke meter/detik
-    let speed_mps = data.sog * 0.514444;
-    let distance = speed_mps * (data.update_rate as f64 / 1000.0); // ms -> s
-
-    // Hitung jarak angular
-    let angular_distance = distance / EARTH_RADIUS;
-
-    // === PERBAIKAN: Menggunakan rumus Haversine untuk menghitung posisi baru ===
-    // Rumus ini akurat secara matematis untuk permukaan bola.
-    let new_lat_rad = (lat_rad.sin() * angular_distance.cos()
-        + lat_rad.cos() * angular_distance.sin() * course_rad.cos())
-    .asin();
-
-    let new_lon_rad = lon_rad
-        + (course_rad.sin() * angular_distance.sin() * lat_rad.cos())
-            .atan2(angular_distance.cos() - lat_rad.sin() * new_lat_rad.sin());
-
-    let mut new_lat = rad_to_deg(new_lat_rad);
-    let mut new_lon = rad_to_deg(new_lon_rad);
-
-    // Clamp latitude ke rentang valid [-90, 90]
-    if new_lat > 90.0 {
-        new_lat = 90.0;
-    } else if new_lat < -90.0 {
-        new_lat = -90.0;
-    }
-
-    // Normalisasi longitude ke [-180, 180]
-    new_lon = (new_lon + 180.0).rem_euclid(360.0) - 180.0;
-
-    // === DIHAPUS: Logika pantulan kutub tidak lagi diperlukan dengan rumus Haversine ===
-    // Rumus Haversine secara alami menangani pergerakan di dekat kutub.
-
-    // data.cog tidak perlu diubah di sini karena COG adalah arah gerak,
-    // yang diasumsikan konstan selama interval waktu kecil ini.
-    (new_lat, new_lon)
-}
-
-/// Update field last_update dengan timestamp UTC saat ini
-pub fn update_last_update_time(data: &mut GPSData) {
-    data.last_update = chrono::Utc::now();
-}
-
-/// Hitung magnetic variation (declination) berdasarkan lat, lon, dan waktu
-pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_str: &str) -> f64 {
-    let datetime = match time::OffsetDateTime::parse(date_str, &time::format_description::well_known::Rfc3339) {
-        Ok(dt) => dt,
-        Err(_) => time::OffsetDateTime::now_utc(),
+    let date = match Date::from_calendar_date(date_time.year(), month, day) {
+        Ok(d) => d,
+        Err(_) => return 0.0,
     };
 
     let height_q = Length::new::<meter>(0.0);
@@ -124,5 +60,8 @@ pub fn calculate_next_gps_state(state: &mut GpsState) {
         + (course_rad.sin() * angular_distance.sin() * lat_rad.cos())
             .atan2(angular_distance.cos() - lat_rad.sin() * new_lat_rad.sin());
 
-    data
+    state.latitude = rad_to_deg(new_lat_rad).clamp(-90.0, 90.0);
+    state.longitude = (rad_to_deg(new_lon_rad) + 180.0).rem_euclid(360.0) - 180.0;
+    state.last_update = Utc::now();
+    state.variation = calculate_magnetic_variation(state.latitude, state.longitude, &state.last_update);
 }
