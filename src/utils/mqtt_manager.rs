@@ -1,9 +1,9 @@
 use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, Packet, QoS};
 use std::time::Duration;
-use tokio::select;
 use tokio::time::sleep;
+use tokio::select;
 
-/// Status koneksi MQTT.
+/// Status koneksi MQTT
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MqttState {
     Disconnected,
@@ -11,45 +11,42 @@ pub enum MqttState {
     Connected,
 }
 
-/// Perintah yang dapat dikirim ke manager.
+/// Perintah antar service
 #[derive(Debug)]
 pub enum MqttCommand {
     Reconnect,
     Stop,
 }
 
-/// Konfigurasi dasar untuk setiap service yang menggunakan MQTT manager.
+/// Konfigurasi dasar MQTT per service
 #[derive(Clone)]
 pub struct MqttServiceConfig {
     pub name: String,
     pub client_id: String,
     pub topic_prefix: String,
+    pub ip: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
     pub keep_alive: Duration,
     pub publish_interval: Duration,
 }
 
-/// Struktur koneksi MQTT aktif.
 struct MqttConnection {
     client: AsyncClient,
     eventloop: EventLoop,
 }
 
 impl MqttConnection {
-    async fn connect(
-        cfg: &MqttServiceConfig,
-        ip: &str,
-        port: u16,
-        username: &str,
-        password: &str,
-    ) -> Option<Self> {
-        let mut mqttoptions = MqttOptions::new(&cfg.client_id, ip, port);
-        mqttoptions.set_credentials(username, password);
+    async fn connect(cfg: &MqttServiceConfig) -> Option<Self> {
+        let mut mqttoptions = MqttOptions::new(&cfg.client_id, &cfg.ip, cfg.port);
+        mqttoptions.set_credentials(&cfg.username, &cfg.password);
         mqttoptions.set_keep_alive(cfg.keep_alive);
 
         let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
         println!(
             "[MQTT Manager {}]: Connected to {}:{}",
-            cfg.name, ip, port
+            cfg.name, cfg.ip, cfg.port
         );
 
         Some(Self { client, eventloop })
@@ -69,8 +66,7 @@ impl MqttConnection {
     }
 }
 
-/// 🔹 Struct baru: MqttManager
-/// Tujuan: menyediakan API `publish_message` yang aman untuk dipanggil dari service
+/// MqttManager — digunakan oleh semua service (GPS, Gyro, dsb)
 #[derive(Clone)]
 pub struct MqttManager {
     client: AsyncClient,
@@ -95,13 +91,10 @@ impl MqttManager {
     }
 }
 
-/// Jalankan service manager MQTT (tanpa spawn internal).
+/// Optional: loop manajerial MQTT (opsional, bisa dipakai untuk reconnect otomatis)
+#[allow(dead_code)]
 pub async fn start_service_manager(
     cfg: MqttServiceConfig,
-    ip: String,
-    port: u16,
-    username: String,
-    password: String,
     mut command_rx: tokio::sync::mpsc::Receiver<MqttCommand>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut state = MqttState::Disconnected;
@@ -117,22 +110,22 @@ pub async fn start_service_manager(
                         connection = None;
                     }
                     MqttCommand::Stop => {
-                        println!("[MQTT Manager {}]: Stopping loop.", cfg.name);
+                        println!("[MQTT Manager {}]: Stopping MQTT loop.", cfg.name);
                         break;
                     }
                 }
             }
-
             _ = sleep(cfg.publish_interval) => {}
         }
 
+        // Jika belum terhubung, coba koneksi baru
         if matches!(state, MqttState::Disconnected) {
             println!("[MQTT Manager {}]: Connecting...", cfg.name);
-            match MqttConnection::connect(&cfg, &ip, port, &username, &password).await {
+            match MqttConnection::connect(&cfg).await {
                 Some(conn) => {
                     state = MqttState::Connected;
-                    println!("[MQTT Manager {}]: Connected!", cfg.name);
                     connection = Some(conn);
+                    println!("[MQTT Manager {}]: Connected!", cfg.name);
                 }
                 None => {
                     eprintln!("[MQTT Manager {}]: Connection failed.", cfg.name);
@@ -154,7 +147,7 @@ pub async fn start_service_manager(
                 }
             }
 
-            // contoh publikasi status
+            // heartbeat status ke topic status
             let topics = vec![format!("{}/status", cfg.topic_prefix)];
             let payload = format!("{{\"status\":\"ok\",\"service\":\"{}\"}}", cfg.name);
             if let Err(e) = conn.publish_message(&topics, payload).await {
@@ -165,6 +158,6 @@ pub async fn start_service_manager(
         }
     }
 
-    println!("[MQTT Manager {}]: Exited loop.", cfg.name);
+    println!("[MQTT Manager {}]: Exited MQTT loop.", cfg.name);
     Ok(())
 }

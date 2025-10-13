@@ -6,59 +6,54 @@ mod utils;
 
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer, http};
-use std::sync::Arc;
-use std::sync::RwLock;
-
+use std::sync::{Arc, RwLock};
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState, GpsConfig};
 use crate::data::gyro_data::{SharedGyroConfig, SharedGyroState, GyroConfig};
 use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::{Clients, handle_websocket_connection, handle_tcp_connection};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
+use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     println!("🚀 Server starting...");
 
-    // Shared data
+    // Shared states
     let shared_gps_config: SharedGpsConfig = Arc::new(RwLock::new(GpsConfig::default()));
     let shared_gyro_config: SharedGyroConfig = Arc::new(RwLock::new(GyroConfig::default()));
     let shared_gps_state: SharedGpsState = Arc::new(RwLock::new(None));
     let shared_gyro_state: SharedGyroState = Arc::new(RwLock::new(None));
-    
     let ws_clients: Clients = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
-    // Channel untuk komunikasi perintah MQTT
+    // Channels
     let (gps_command_tx, gps_command_rx) = mpsc::channel::<MqttCommand>(10);
     let (gyro_command_tx, gyro_command_rx) = mpsc::channel::<MqttCommand>(10);
 
-    use rumqttc::{AsyncClient, MqttOptions};
-
-    let mut mqttoptions = MqttOptions::new("vessel-client", "broker.hivemq.com", 1883);
+    // MQTT Client (dihubungkan dari config)
+    let mut mqttoptions = MqttOptions::new("vessel-client", "127.0.0.1", 1883);
     mqttoptions.set_keep_alive(std::time::Duration::from_secs(5));
-    let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
-
+    let (client, _eventloop) = AsyncClient::new(mqttoptions, 10);
     let mqtt_manager = Arc::new(MqttManager::new(client));
 
     println!("🧠 Starting background services...");
 
-    // GPS
+    // Jalankan kalkulasi + publikasi
     services::gps_service::start_gps_calculation_thread(shared_gps_state.clone());
     services::gps_service::start_gps_publication_thread(
         shared_gps_config.clone(),
         shared_gps_state.clone(),
         ws_clients.clone(),
-        mqtt_manager.clone(), // ✅ tambahan argumen baru
+        mqtt_manager.clone(),
         gps_command_rx,
     );
 
-    // Gyro
     services::gyro_service::start_gyro_calculation_thread(shared_gyro_state.clone());
     services::gyro_service::start_gyro_publication_thread(
         shared_gyro_config.clone(),
         shared_gyro_state.clone(),
         ws_clients.clone(),
-        mqtt_manager.clone(), // ✅ tambahan argumen baru
+        mqtt_manager.clone(),
         gyro_command_rx,
     );
 
@@ -74,10 +69,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(shared_gps_state.clone()))
             .app_data(web::Data::new(shared_gyro_config.clone()))
             .app_data(web::Data::new(shared_gyro_state.clone()))
-            .app_data(web::Data::new(ws_clients_for_api.clone())) 
+            .app_data(web::Data::new(ws_clients_for_api.clone()))
             .app_data(web::Data::new(gps_command_tx.clone()))
             .app_data(web::Data::new(gyro_command_tx.clone()))
-            .app_data(web::Data::new(mqtt_manager_for_api.clone())) // ✅ tambahan jika nanti API perlu akses manager
+            .app_data(web::Data::new(mqtt_manager_for_api.clone()))
             .wrap(
                 Cors::default()
                     .allow_any_origin()
@@ -94,10 +89,10 @@ async fn main() -> std::io::Result<()> {
     })
     .bind("127.0.0.1:8080")?
     .run();
-    
+
     println!("🌐 API Server started on http://127.0.0.1:8080");
 
-    // WebSocket listener
+    // WebSocket
     let websocket_listener = TcpListener::bind("127.0.0.1:8081").await?;
     tokio::spawn(async move {
         println!("🔌 WebSocket server started on ws://127.0.0.1:8081");
@@ -106,7 +101,7 @@ async fn main() -> std::io::Result<()> {
         }
     });
 
-    // TCP listener
+    // TCP
     let tcp_listener = TcpListener::bind("127.0.0.1:9000").await?;
     tokio::spawn(async move {
         println!("📡 TCP server started on tcp://127.0.0.1:9000");

@@ -1,5 +1,5 @@
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState};
-use crate::utils::mqtt_manager::{MqttManager, MqttCommand, MqttServiceConfig};
+use crate::utils::mqtt_manager::{MqttManager, MqttCommand};
 use crate::utils;
 use crate::utils::net::Clients;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ use tokio::time::sleep;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
-/// Thread perhitungan GPS — tetap sama seperti sebelumnya.
+/// 🔹 Thread perhitungan GPS (lokal, non-async)
 pub fn start_gps_calculation_thread(state: SharedGpsState) {
     let state_clone = Arc::clone(&state);
     thread::spawn(move || {
@@ -27,7 +27,7 @@ pub fn start_gps_calculation_thread(state: SharedGpsState) {
     });
 }
 
-/// Thread publikasi GPS yang kini menggunakan `MqttManager` (bukan langsung eventloop).
+/// 🔹 Thread publikasi GPS ke MQTT + WebSocket
 pub fn start_gps_publication_thread(
     config_state: SharedGpsConfig,
     data_state: SharedGpsState,
@@ -36,54 +36,53 @@ pub fn start_gps_publication_thread(
     mut command_rx: mpsc::Receiver<MqttCommand>,
 ) {
     tokio::spawn(async move {
-        // Ambil konfigurasi dasar dari shared state
-        let update_rate = {
-            let config = config_state.read().unwrap();
-            config.update_rate.unwrap_or(1000)
-        };
-
-        let topic_prefix = "vessel/gps".to_string();
-
-        // Loop utama publikasi data GPS
         loop {
+            // snapshot config
+            let (update_rate, topic_prefix) = {
+                let cfg = config_state.read().unwrap();
+                let ur = cfg.update_rate.unwrap_or(1000);
+                // ambil topic pertama atau default
+                let tp = cfg.topics.first().cloned().unwrap_or_else(|| "vessel/gps".to_string());
+                (ur, tp)
+            };
+
             select! {
                 Some(cmd) = command_rx.recv() => {
                     match cmd {
                         MqttCommand::Reconnect => {
-                            println!("[GPS Service]: Reconnect requested.");
-                            // handled externally oleh mqtt_manager
+                            tracing::info!("[GPS Service]: Reconnect requested.");
                         }
                         MqttCommand::Stop => {
-                            println!("[GPS Service]: Stopping publication.");
+                            tracing::info!("[GPS Service]: Stop requested. Exiting publication loop.");
                             break;
                         }
                     }
                 }
 
                 _ = sleep(Duration::from_millis(update_rate)) => {
-                    // Ambil data dari state
-                    let data_opt = {
-                        let guard = data_state.read().unwrap();
-                        guard.clone()
-                    };
+                    let data_opt = { data_state.read().unwrap().clone() };
 
                     if let Some(gps_state) = data_opt {
                         if gps_state.is_running {
-                            // Publish ke MQTT
-                            let payload = serde_json::to_string(&gps_state).unwrap_or_default();
+                            let payload = match serde_json::to_string(&gps_state) {
+                                Ok(p) => p,
+                                Err(e) => { eprintln!("[GPS Service]: JSON serialize error: {}", e); continue; }
+                            };
                             let topic = format!("{}/data", topic_prefix);
-                            let _ = mqtt_manager.publish_message(&[topic], payload).await;
 
-                            // Broadcast ke WebSocket
+                            if let Err(e) = mqtt_manager.publish_message(&[topic.clone()], payload.clone()).await {
+                                eprintln!("[GPS Service]: MQTT publish error to {}: {:?}", topic, e);
+                            }
+
                             let msg = serde_json::json!({ "type": "gps_update", "data": gps_state });
                             let json = msg.to_string();
-                            utils::net::broadcast_ws_message(&ws_clients, json).await;
+                            utils::net::broadcast_ws_message(&ws_clients, json).await.ok();
                         }
                     }
                 }
             }
         }
 
-        println!("[GPS Service]: Publication thread exited.");
+        tracing::info!("[GPS Service]: Publication thread exited.");
     });
 }
