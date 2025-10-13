@@ -1,130 +1,86 @@
 use crate::data::gyro_data::{SharedGyroConfig, SharedGyroState};
-use crate::services::MqttCommand;
+use crate::utils::mqtt_manager::{MqttManager, MqttCommand, MqttServiceConfig};
 use crate::utils;
 use crate::utils::net::Clients;
-// DIUBAH: Hapus import yang tidak digunakan
-use rumqttc::{AsyncClient, MqttOptions}; 
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::select;
+use std::thread;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio::time::sleep;
+use tokio::select;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+/// Thread kalkulasi gyro — tetap sama.
 pub fn start_gyro_calculation_thread(state: SharedGyroState) {
-    tokio::spawn(async move {
+    let state_clone = Arc::clone(&state);
+    thread::spawn(move || {
         loop {
-            sleep(Duration::from_millis(CALCULATION_INTERVAL_MS)).await;
-            {
-                let mut guard = state.write().unwrap();
-                if let Some(ref mut gyro_state) = *guard {
-                    if gyro_state.is_running {
-                        utils::gyro_calculate::calculate_next_gyro_state(gyro_state);
-                    }
+            thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
+            let mut guard = state_clone.write().unwrap();
+            if let Some(ref mut gyro_state) = *guard {
+                if gyro_state.is_running {
+                    utils::gyro_calculate::calculate_next_gyro_state(gyro_state);
                 }
             }
         }
     });
 }
 
+/// Thread publikasi gyro — sinkron ke `MqttManager`.
 pub fn start_gyro_publication_thread(
     config_state: SharedGyroConfig,
     data_state: SharedGyroState,
     ws_clients: Clients,
+    mqtt_manager: Arc<MqttManager>,
     mut command_rx: mpsc::Receiver<MqttCommand>,
 ) {
     tokio::spawn(async move {
-        let mut mqtt_client: Option<AsyncClient> = None;
-        let mut eventloop_handle: Option<JoinHandle<()>> = None;
+        let update_rate = {
+            let config = config_state.read().unwrap();
+            config.update_rate.unwrap_or(1000)
+        };
+
+        let topic_prefix = "vessel/gyro".to_string();
 
         loop {
-            let update_rate = config_state.read().unwrap().update_rate.unwrap_or(1000);
-
             select! {
-                Some(command) = command_rx.recv() => {
-                    match command {
+                Some(cmd) = command_rx.recv() => {
+                    match cmd {
                         MqttCommand::Reconnect => {
-                            println!("[MQTT Manager Gyro]: Reconnect command received. Resetting connection.");
-                            if let Some(handle) = eventloop_handle.take() {
-                                handle.abort();
-                            }
-                            mqtt_client = None;
+                            println!("[Gyro Service]: Reconnect requested.");
+                            // handled externally oleh mqtt_manager
+                        }
+                        MqttCommand::Stop => {
+                            println!("[Gyro Service]: Stopping publication.");
+                            break;
                         }
                     }
                 }
-                _ = sleep(Duration::from_millis(update_rate)) => {}
-            }
 
-            // DIUBAH: Logika koneksi ulang dengan pola Lock -> Salin -> Lepas Lock -> Await
-            if mqtt_client.is_none() {
-                println!("[MQTT Manager Gyro]: Attempting to connect...");
+                _ = sleep(Duration::from_millis(update_rate)) => {
+                    let data_opt = {
+                        let guard = data_state.read().unwrap();
+                        guard.clone()
+                    };
 
-                let connection_details = { // Scope pendek untuk lock
-                    let config = config_state.read().unwrap();
-                    if let (Some(ip), Some(port), Some(username), Some(password)) =
-                        (&config.ip, config.port, &config.username, &config.password)
-                    {
-                        Some((ip.clone(), port, username.clone(), password.clone()))
-                    } else {
-                        None
-                    }
-                }; // Lock dilepas di sini
+                    if let Some(gyro_state) = data_opt {
+                        if gyro_state.is_running {
+                            // Publish ke MQTT
+                            let payload = serde_json::to_string(&gyro_state).unwrap_or_default();
+                            let topic = format!("{}/data", topic_prefix);
+                            let _ = mqtt_manager.publish_message(&[topic], payload).await;
 
-                if let Some((ip, port, username, password)) = connection_details {
-                    let mut mqttoptions = MqttOptions::new("vessel_gyro_publisher", ip, port);
-                    mqttoptions.set_credentials(username, password);
-                    mqttoptions.set_keep_alive(Duration::from_secs(5));
-                    
-                    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-                    
-                    // Operasi .await sekarang aman karena tidak ada lock yang dipegang
-                    match eventloop.poll().await {
-                        Ok(_) => {
-                             println!("[MQTT Manager Gyro]: Connection successful!");
-                             mqtt_client = Some(client);
-                             let handle = tokio::spawn(async move {
-                                 loop {
-                                     if eventloop.poll().await.is_err() { break; }
-                                 }
-                             });
-                             eventloop_handle = Some(handle);
+                            // Broadcast ke WebSocket
+                            let msg = serde_json::json!({ "type": "gyro_update", "data": gyro_state });
+                            let json = msg.to_string();
+                            utils::net::broadcast_ws_message(&ws_clients, json).await;
                         }
-                        Err(e) => {
-                             eprintln!("[MQTT Manager Gyro]: Failed to connect: {}. Will retry later.", e);
-                        }
-                    }
-                } else {
-                    println!("[MQTT Manager Gyro]: Config is incomplete. Skipping connection attempt.");
-                }
-            }
-            
-            if let Some(client) = &mqtt_client {
-                if eventloop_handle.as_ref().map_or(true, |h| h.is_finished()) {
-                    eprintln!("[MQTT Manager Gyro]: Disconnected from broker. Will attempt to reconnect.");
-                    mqtt_client = None;
-                    eventloop_handle = None;
-                    continue;
-                }
-
-                let data_to_publish = {
-                    let guard = data_state.read().unwrap();
-                    guard.as_ref().filter(|s| s.is_running).cloned()
-                };
-
-                if let Some(gyro_state) = data_to_publish {
-                    let message_payload = serde_json::json!({ "type": "gyro_update", "data": gyro_state });
-                    let message_string = message_payload.to_string();
-                    println!("[GYRO PUBLISH]: {}", message_string);
-
-                    utils::net::broadcast_ws_message(&ws_clients, message_string.clone()).await;
-                    
-                    let topics = config_state.read().unwrap().topics.clone().unwrap_or_default();
-                    if let Err(e) = utils::mqtt::publish_mqtt_message(client, &topics, message_string).await {
-                        eprintln!("Failed to publish Gyro data to MQTT: {}", e);
                     }
                 }
             }
         }
+
+        println!("[Gyro Service]: Publication thread exited.");
     });
 }

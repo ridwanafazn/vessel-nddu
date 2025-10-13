@@ -4,7 +4,7 @@ use crate::data::gps_data::{
     CreateGpsRequest, GpsConfig, GpsState, SharedGpsConfig, SharedGpsState, UpdateGpsConfigRequest,
     UpdateGpsRequest,
 };
-use crate::services::MqttCommand;
+use crate::utils::mqtt_manager::MqttCommand;
 use crate::utils::gps_calculate;
 use chrono::Utc;
 

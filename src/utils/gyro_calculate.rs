@@ -1,6 +1,6 @@
 use crate::data::gyro_data::GyroState;
 use chrono::Utc;
-use rand::thread_rng;
+use rand::rng;
 use rand_distr::{Distribution, Normal};
 use std::f64::consts::PI;
 
@@ -21,7 +21,7 @@ pub fn calculate_next_gyro_state(state: &mut GyroState) {
     let t = Utc::now().timestamp_millis() as f64 / 1000.0;
     
     // Panggilan ini yang menyebabkan warning, sekarang akan diabaikan oleh compiler.
-    let mut rng = thread_rng();
+    let mut rng = rng();
     let normal = Normal::new(0.0, 0.05).unwrap();
     let noise: f64 = normal.sample(&mut rng);
 

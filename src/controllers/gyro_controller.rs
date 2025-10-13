@@ -4,7 +4,7 @@ use crate::data::gyro_data::{
     CreateGyroRequest, GyroConfig, GyroState, SharedGyroConfig, SharedGyroState,
     UpdateGyroConfigRequest, UpdateGyroRequest,
 };
-use crate::services::MqttCommand;
+use crate::utils::mqtt_manager::MqttCommand;
 use chrono::Utc;
 
 // === CONFIG HANDLERS ===
