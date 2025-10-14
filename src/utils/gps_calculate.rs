@@ -1,7 +1,7 @@
-use crate::data::gps_data::GpsState;
-use chrono::{Datelike, Utc}; // Menggunakan trait Datelike dari chrono
+use crate::data::gps_data::GpsData;
+use chrono::{Datelike, Utc};
 use std::f64::consts::PI;
-use time::{Date, Month}; // Mengimpor Month dari time
+use time::{Date, Month};
 use uom::si::angle::degree;
 use uom::si::f32::*;
 use uom::si::length::meter;
@@ -17,14 +17,11 @@ fn rad_to_deg(rad: f64) -> f64 {
     rad * 180.0 / PI
 }
 
-// DIUBAH: Dibuat `pub` agar bisa diakses controller. Logika tanggal diperbaiki.
 pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &chrono::DateTime<Utc>) -> f64 {
-    // Konversi u32 month dari chrono ke enum Month dari time
     let month = match Month::try_from(date_time.month() as u8) {
         Ok(m) => m,
-        Err(_) => return 0.0, // Return default jika konversi gagal
+        Err(_) => return 0.0,
     };
-    // Konversi u32 day dari chrono ke u8
     let day = date_time.day() as u8;
 
     let date = match Date::from_calendar_date(date_time.year(), month, day) {
@@ -42,14 +39,15 @@ pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &chrono::Date
     }
 }
 
-pub fn calculate_next_gps_state(state: &mut GpsState) {
-    let dt_seconds = state.calculation_rate_ms as f64 / 1000.0;
-    let speed_mps = state.sog * 0.514444;
+// DIUBAH: Fungsi sekarang menerima `dt_seconds` (delta time in seconds) sebagai argumen.
+pub fn calculate_next_gps_state(gps_data: &mut GpsData, dt_seconds: f64) {
+    // DIPERBAIKI: Semua variabel `data` diganti menjadi `gps_data`.
+    let speed_mps = gps_data.sog * 0.514444; // Konversi knot ke m/s
     let distance = speed_mps * dt_seconds;
 
-    let lat_rad = deg_to_rad(state.latitude);
-    let lon_rad = deg_to_rad(state.longitude);
-    let course_rad = deg_to_rad(state.cog);
+    let lat_rad = deg_to_rad(gps_data.latitude);
+    let lon_rad = deg_to_rad(gps_data.longitude);
+    let course_rad = deg_to_rad(gps_data.cog);
     let angular_distance = distance / EARTH_RADIUS;
 
     let new_lat_rad = (lat_rad.sin() * angular_distance.cos()
@@ -60,8 +58,8 @@ pub fn calculate_next_gps_state(state: &mut GpsState) {
         + (course_rad.sin() * angular_distance.sin() * lat_rad.cos())
             .atan2(angular_distance.cos() - lat_rad.sin() * new_lat_rad.sin());
 
-    state.latitude = rad_to_deg(new_lat_rad).clamp(-90.0, 90.0);
-    state.longitude = (rad_to_deg(new_lon_rad) + 180.0).rem_euclid(360.0) - 180.0;
-    state.last_update = Utc::now();
-    state.variation = calculate_magnetic_variation(state.latitude, state.longitude, &state.last_update);
+    gps_data.latitude = rad_to_deg(new_lat_rad).clamp(-90.0, 90.0);
+    gps_data.longitude = (rad_to_deg(new_lon_rad) + 180.0).rem_euclid(360.0) - 180.0;
+    gps_data.last_update = Utc::now();
+    gps_data.variation = calculate_magnetic_variation(gps_data.latitude, gps_data.longitude, &gps_data.last_update);
 }

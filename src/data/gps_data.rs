@@ -1,15 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
 
-// DIUBAH: Sekarang ada dua tipe alias terpisah untuk State dan Config.
-pub type SharedGpsState = Arc<RwLock<Option<GpsState>>>;
-pub type SharedGpsConfig = Arc<RwLock<GpsConfig>>;
+// DIHAPUS: Tipe alias Shared... tidak lagi dibutuhkan karena kita pakai AppState.
 
-// DIUBAH: Struct ini sekarang ramping dan HANYA berisi data sensor.
-// Field `config` telah dihapus.
+// DIUBAH: Ganti nama GpsState menjadi GpsData agar lebih intuitif sebagai data transfer object (DTO).
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct GpsState {
+pub struct GpsData {
     pub latitude: f64,
     pub longitude: f64,
     pub sog: f64,
@@ -17,11 +13,10 @@ pub struct GpsState {
     pub variation: f64,
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    #[serde(skip)]
-    pub calculation_rate_ms: u64,
+    // DIHAPUS: `calculation_rate_ms` tidak perlu disimpan di sini, karena sudah ada di GpsConfig.
 }
 
-// DIUBAH: Struct ini sekarang independen dan semua field-nya adalah Option<T>.
+// Struct GpsConfig sudah bagus, tidak perlu diubah.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GpsConfig {
     pub ip: Option<String>,
@@ -33,7 +28,6 @@ pub struct GpsConfig {
     pub topics: Option<Vec<String>>,
 }
 
-// DIUBAH: Default untuk Config sekarang adalah semua field bernilai None.
 impl Default for GpsConfig {
     fn default() -> Self {
         GpsConfig {
@@ -41,17 +35,15 @@ impl Default for GpsConfig {
             port: None,
             username: None,
             password: None,
-            update_rate: None,
-            topics: None,
+            update_rate: Some(1000), // Default 1 detik
+            topics: Some(vec!["vessel/gps/data".to_string()]), // Default topic
         }
     }
 }
 
-// Struct untuk request API di bawah ini sebagian besar tetap sama,
-// karena sudah dirancang dengan baik.
-
+// Struct untuk request API, diubah agar lebih sesuai dengan ekspektasi API Anda.
 #[derive(Deserialize, Debug)]
-pub struct CreateGpsRequest {
+pub struct CreateGpsPayload {
     pub latitude: f64,
     pub longitude: f64,
     pub sog: f64,
@@ -60,7 +52,7 @@ pub struct CreateGpsRequest {
 }
 
 #[derive(Deserialize, Debug, Default)]
-pub struct UpdateGpsRequest {
+pub struct UpdateGpsPayload {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
     pub sog: Option<f64>,
@@ -69,7 +61,7 @@ pub struct UpdateGpsRequest {
 }
 
 #[derive(Deserialize, Debug, Default)]
-pub struct UpdateGpsConfigRequest {
+pub struct UpdateGpsConfigPayload {
     pub ip: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,

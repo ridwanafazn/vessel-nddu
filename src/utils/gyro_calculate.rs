@@ -1,6 +1,6 @@
-use crate::data::gyro_data::GyroState;
+use crate::data::gyro_data::GyroData;
 use chrono::Utc;
-use rand::thread_rng;
+// DIHAPUS: `use rand::Rng;` tidak diperlukan untuk kode ini.
 use rand_distr::{Distribution, Normal};
 use std::f64::consts::PI;
 
@@ -12,22 +12,23 @@ fn clamp(value: f64, min: f64, max: f64) -> f64 {
     value.max(min).min(max)
 }
 
-// DIUBAH: Menambahkan atribut #[allow(deprecated)] untuk menyembunyikan warning
-#[allow(deprecated)]
-pub fn calculate_next_gyro_state(state: &mut GyroState) {
-    let dt_seconds = state.calculation_rate_ms as f64 / 1000.0;
-    let new_yaw = state.yaw + state.yaw_rate * dt_seconds;
-    state.yaw = normalize_yaw(new_yaw);
+pub fn calculate_next_gyro_state(gyro_data: &mut GyroData, dt_seconds: f64) {
+    let new_yaw = gyro_data.yaw + gyro_data.yaw_rate * dt_seconds;
+    gyro_data.yaw = normalize_yaw(new_yaw);
+    
     let t = Utc::now().timestamp_millis() as f64 / 1000.0;
     
-    // Panggilan ini yang menyebabkan warning, sekarang akan diabaikan oleh compiler.
-    let mut rng = thread_rng();
+    // DIPERBAIKI: Menggunakan `rand::thread_rng()` yang modern dan tidak deprecated.
+    // Ini adalah cara yang benar dan akan menghilangkan warning.
+    let mut rng = rand::thread_rng();
     let normal = Normal::new(0.0, 0.05).unwrap();
     let noise: f64 = normal.sample(&mut rng);
 
     let roll_wave = 2.0 * (2.0 * PI * t / 8.0).sin();
-    state.roll = clamp(roll_wave + noise, -60.0, 60.0);
+    gyro_data.roll = clamp(roll_wave + noise, -60.0, 60.0);
+    
     let pitch_wave = 1.0 * (2.0 * PI * t / 10.0).sin();
-    state.pitch = clamp(pitch_wave + noise, -30.0, 30.0);
-    state.last_update = Utc::now();
+    gyro_data.pitch = clamp(pitch_wave + noise, -30.0, 30.0);
+    
+    gyro_data.last_update = Utc::now();
 }

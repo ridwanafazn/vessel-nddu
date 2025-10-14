@@ -1,128 +1,69 @@
-use crate::data::gyro_data::{SharedGyroConfig, SharedGyroState};
-use crate::services::MqttCommand;
+// DIUBAH: Path import disesuaikan.
+use crate::AppState;
 use crate::utils;
-use crate::utils::net::Clients;
-// DIUBAH: Hapus import yang tidak digunakan
-use rumqttc::{AsyncClient, MqttOptions}; 
 use std::time::Duration;
-use tokio::select;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
-const CALCULATION_INTERVAL_MS: u64 = 100;
-
-pub fn start_gyro_calculation_thread(state: SharedGyroState) {
+/// Menjalankan semua background task yang berhubungan dengan Gyro.
+pub fn run_gyro_tasks(state: AppState) {
+    // Task 1: Kalkulasi data Gyro sesuai `update_rate`.
+    let calc_state = state.clone();
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_millis(CALCULATION_INTERVAL_MS)).await;
-            {
-                let mut guard = state.write().unwrap();
-                if let Some(ref mut gyro_state) = *guard {
-                    if gyro_state.is_running {
-                        utils::gyro_calculate::calculate_next_gyro_state(gyro_state);
+            let update_rate_ms = {
+                let config = calc_state.gyro_config.read().await;
+                config.update_rate.unwrap_or(1000)
+            };
+            sleep(Duration::from_millis(update_rate_ms)).await;
+
+            let mut guard = calc_state.gyro_data.write().await;
+            if let Some(ref mut gyro_data) = *guard {
+                if gyro_data.is_running {
+                    // BARU: Hitung delta time (dt) dalam detik dari update_rate.
+                    let dt_seconds = update_rate_ms as f64 / 1000.0;
+                    
+                    // DIUBAH: Panggil fungsi kalkulasi dengan argumen dt_seconds.
+                    utils::gyro_calculate::calculate_next_gyro_state(gyro_data, dt_seconds);
+
+                    let updated_data = gyro_data.clone();
+                    drop(guard);
+                    
+                    // Kirim notifikasi update
+                    if let Err(e) = calc_state.gyro_update_tx.send(updated_data) {
+                         log::warn!("[Gyro Calc Task] Gagal mengirim update, tidak ada subscriber aktif: {}", e);
                     }
                 }
             }
         }
     });
-}
 
-pub fn start_gyro_publication_thread(
-    config_state: SharedGyroConfig,
-    data_state: SharedGyroState,
-    ws_clients: Clients,
-    mut command_rx: mpsc::Receiver<MqttCommand>,
-) {
+    // Task 2: Mendengarkan dan mempublikasikan update Gyro.
+    let pub_state = state.clone();
     tokio::spawn(async move {
-        let mut mqtt_client: Option<AsyncClient> = None;
-        let mut eventloop_handle: Option<JoinHandle<()>> = None;
-
+        let mut rx = pub_state.gyro_update_tx.subscribe();
+        log::info!("[Gyro Pub Task] Siap mendengarkan update Gyro...");
         loop {
-            let update_rate = config_state.read().unwrap().update_rate.unwrap_or(1000);
-
-            select! {
-                Some(command) = command_rx.recv() => {
-                    match command {
-                        MqttCommand::Reconnect => {
-                            println!("[MQTT Manager Gyro]: Reconnect command received. Resetting connection.");
-                            if let Some(handle) = eventloop_handle.take() {
-                                handle.abort();
-                            }
-                            mqtt_client = None;
-                        }
-                    }
-                }
-                _ = sleep(Duration::from_millis(update_rate)) => {}
-            }
-
-            // DIUBAH: Logika koneksi ulang dengan pola Lock -> Salin -> Lepas Lock -> Await
-            if mqtt_client.is_none() {
-                println!("[MQTT Manager Gyro]: Attempting to connect...");
-
-                let connection_details = { // Scope pendek untuk lock
-                    let config = config_state.read().unwrap();
-                    if let (Some(ip), Some(port), Some(username), Some(password)) =
-                        (&config.ip, config.port, &config.username, &config.password)
-                    {
-                        Some((ip.clone(), port, username.clone(), password.clone()))
-                    } else {
-                        None
-                    }
-                }; // Lock dilepas di sini
-
-                if let Some((ip, port, username, password)) = connection_details {
-                    let mut mqttoptions = MqttOptions::new("vessel_gyro_publisher", ip, port);
-                    mqttoptions.set_credentials(username, password);
-                    mqttoptions.set_keep_alive(Duration::from_secs(5));
+            match rx.recv().await {
+                 Ok(gyro_data) => {
+                    let topics = {
+                        let config = pub_state.gyro_config.read().await;
+                        config.topics.clone().unwrap_or_default()
+                    };
                     
-                    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-                    
-                    // Operasi .await sekarang aman karena tidak ada lock yang dipegang
-                    match eventloop.poll().await {
-                        Ok(_) => {
-                             println!("[MQTT Manager Gyro]: Connection successful!");
-                             mqtt_client = Some(client);
-                             let handle = tokio::spawn(async move {
-                                 loop {
-                                     if eventloop.poll().await.is_err() { break; }
-                                 }
-                             });
-                             eventloop_handle = Some(handle);
-                        }
-                        Err(e) => {
-                             eprintln!("[MQTT Manager Gyro]: Failed to connect: {}. Will retry later.", e);
-                        }
-                    }
-                } else {
-                    println!("[MQTT Manager Gyro]: Config is incomplete. Skipping connection attempt.");
-                }
-            }
-            
-            if let Some(client) = &mqtt_client {
-                if eventloop_handle.as_ref().map_or(true, |h| h.is_finished()) {
-                    eprintln!("[MQTT Manager Gyro]: Disconnected from broker. Will attempt to reconnect.");
-                    mqtt_client = None;
-                    eventloop_handle = None;
-                    continue;
-                }
-
-                let data_to_publish = {
-                    let guard = data_state.read().unwrap();
-                    guard.as_ref().filter(|s| s.is_running).cloned()
-                };
-
-                if let Some(gyro_state) = data_to_publish {
-                    let message_payload = serde_json::json!({ "type": "gyro_update", "data": gyro_state });
+                    let message_payload = serde_json::json!({ "type": "gyro_update", "data": gyro_data });
                     let message_string = message_payload.to_string();
-                    println!("[GYRO PUBLISH]: {}", message_string);
 
-                    utils::net::broadcast_ws_message(&ws_clients, message_string.clone()).await;
-                    
-                    let topics = config_state.read().unwrap().topics.clone().unwrap_or_default();
-                    if let Err(e) = utils::mqtt::publish_mqtt_message(client, &topics, message_string).await {
-                        eprintln!("Failed to publish Gyro data to MQTT: {}", e);
+                    utils::net::broadcast_ws_message(&pub_state.ws_clients, message_string.clone()).await;
+
+                    for topic in topics {
+                        if let Err(e) = pub_state.mqtt_manager.publish(&topic, message_string.clone()).await {
+                            log::error!("[Gyro Pub Task] Gagal publish ke MQTT topic '{}': {:?}", topic, e);
+                        }
                     }
+                    log::info!("[Gyro Pub Task] Berhasil mempublikasikan update Gyro.");
+                },
+                Err(e) => {
+                    log::error!("[Gyro Pub Task] Error saat menerima update dari channel: {}", e);
                 }
             }
         }

@@ -12,8 +12,7 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .service(
                 web::scope("/config")
                     .route("", web::get().to(gyro_controller::get_config))
-                    .route("", web::patch().to(gyro_controller::post_config))
-                    .route("", web::post().to(gyro_controller::post_config))
+                    .route("", web::patch().to(gyro_controller::update_config)) 
                     .route("", web::delete().to(gyro_controller::delete_config)),
             ),
     );

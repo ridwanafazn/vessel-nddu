@@ -1,150 +1,101 @@
 use actix_web::{web, HttpResponse, Responder};
-use crate::controllers::MqttCommandTx;
-use crate::data::gyro_data::{
-    CreateGyroRequest, GyroConfig, GyroState, SharedGyroConfig, SharedGyroState,
-    UpdateGyroConfigRequest, UpdateGyroRequest,
-};
-use crate::services::MqttCommand;
+use crate::data::gyro_data::{CreateGyroPayload, GyroConfig, GyroData, UpdateGyroConfigPayload, UpdateGyroPayload};
+use crate::AppState;
 use chrono::Utc;
 
 // === CONFIG HANDLERS ===
 
-#[allow(clippy::let_and_return)]
-pub async fn get_config(config: web::Data<SharedGyroConfig>) -> impl Responder {
-    let guard = config.read().unwrap();
+/// [GET] /api/gyro/config
+pub async fn get_config(state: web::Data<AppState>) -> impl Responder {
+    let guard = state.gyro_config.read().await;
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Gyro Config retrieved successfully.",
         "data": &*guard
     }))
 }
 
-pub async fn post_config(
-    config: web::Data<SharedGyroConfig>,
-    command_tx: web::Data<MqttCommandTx>,
-    body: web::Json<UpdateGyroConfigRequest>,
-) -> impl Responder {
-    let mut guard = config.write().unwrap();
+/// [PATCH] /api/gyro/config
+pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGyroConfigPayload>) -> impl Responder {
+    let mut guard = state.gyro_config.write().await;
     let patch = body.into_inner();
-
-    guard.ip = patch.ip.or_else(|| guard.ip.clone());
-    guard.port = patch.port.or(guard.port);
-    guard.username = patch.username.or_else(|| guard.username.clone());
-    guard.password = patch.password.or_else(|| guard.password.clone());
-    guard.update_rate = patch.update_rate.or(guard.update_rate);
-    guard.topics = patch.topics.or_else(|| guard.topics.clone());
-    
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
-
+    if let Some(ip) = patch.ip { guard.ip = Some(ip); }
+    if let Some(port) = patch.port { guard.port = Some(port); }
+    if let Some(username) = patch.username { guard.username = Some(username); }
+    if let Some(password) = patch.password { guard.password = Some(password); }
+    if let Some(update_rate) = patch.update_rate { guard.update_rate = Some(update_rate); }
+    if let Some(topics) = patch.topics { guard.topics = Some(topics); }
+    log::info!("[API] Gyro config updated to: {:?}", *guard);
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Gyro Config updated successfully.",
         "data": &*guard
     }))
 }
 
-pub async fn delete_config(
-    config: web::Data<SharedGyroConfig>,
-    command_tx: web::Data<MqttCommandTx>,
-) -> impl Responder {
-    let mut guard = config.write().unwrap();
-    *guard = GyroConfig::default();
-
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
-
-    HttpResponse::Ok().json(serde_json::json!({
-        "message": "Gyro Config deleted successfully."
-    }))
+/// [DELETE] /api/gyro/config
+pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
+    *state.gyro_config.write().await = GyroConfig::default();
+    HttpResponse::Ok().json(serde_json::json!({"message": "Gyro Config reset to default."}))
 }
 
-// === SENSOR STATE HANDLERS ===
+// === SENSOR DATA HANDLERS ===
+// (Pola yang sama persis seperti gps_controller)
 
-pub async fn create_gyro(
-    data_state: web::Data<SharedGyroState>,
-    config_state: web::Data<SharedGyroConfig>,
-    body: web::Json<CreateGyroRequest>,
-) -> impl Responder {
-    {
-        let config_guard = config_state.read().unwrap();
-        if config_guard.ip.is_none() || config_guard.port.is_none() || config_guard.update_rate.is_none() {
-            return HttpResponse::Conflict().json(serde_json::json!({
-                "message": "Cannot create sensor simulation: Configuration is incomplete."
-            }));
-        }
-    }
-
-    let mut data_guard = data_state.write().unwrap();
-    if data_guard.is_some() {
+/// [POST] /api/gyro
+pub async fn create_gyro(state: web::Data<AppState>, body: web::Json<CreateGyroPayload>) -> impl Responder {
+    if state.gyro_data.read().await.is_some() {
         return HttpResponse::Conflict().json(serde_json::json!({
-            "message": "Gyro instance already exists."
+            "message": "Gyro data already exists."
         }));
     }
-
     let req = body.into_inner();
-    let new_state = GyroState {
+    let new_data = GyroData {
         yaw: req.yaw, pitch: req.pitch, roll: req.roll,
-        yaw_rate: req.yaw_rate, is_running: req.is_running,
+        yaw_rate: req.yaw_rate,
+        is_running: req.is_running,
         last_update: Utc::now(),
-        calculation_rate_ms: 100,
     };
-
-    *data_guard = Some(new_state.clone());
-
+    *state.gyro_data.write().await = Some(new_data.clone());
+    let _ = state.gyro_update_tx.send(new_data.clone());
     HttpResponse::Created().json(serde_json::json!({
         "message": "Gyro created successfully.",
-        "data": new_state
+        "data": new_data
     }))
 }
 
-pub async fn get_gyro(state: web::Data<SharedGyroState>) -> impl Responder {
-    let guard = state.read().unwrap();
+/// [GET] /api/gyro
+pub async fn get_gyro(state: web::Data<AppState>) -> impl Responder {
+    let guard = state.gyro_data.read().await;
     match guard.as_ref() {
-        Some(gyro_state) => HttpResponse::Ok().json(serde_json::json!({
-            "message": "Gyro retrieved successfully.",
-            "data": gyro_state
-        })),
-        None => HttpResponse::NotFound().json(serde_json::json!({ "message": "Gyro Data not found" })),
+        Some(data) => HttpResponse::Ok().json(serde_json::json!({"data": data})),
+        None => HttpResponse::NotFound().json(serde_json::json!({"message": "Gyro Data not found"})),
     }
 }
 
-pub async fn update_gyro(
-    data_state: web::Data<SharedGyroState>,
-    config_state: web::Data<SharedGyroConfig>,
-    body: web::Json<UpdateGyroRequest>,
-) -> impl Responder {
-    let patch = body.into_inner();
-    
-    if patch.is_running == Some(true) {
-        let config_guard = config_state.read().unwrap();
-        if config_guard.ip.is_none() || config_guard.port.is_none() || config_guard.update_rate.is_none() {
-            return HttpResponse::Conflict().json(serde_json::json!({
-                "message": "Cannot start simulation: Configuration is incomplete."
-            }));
-        }
-    }
-
-    let mut data_guard = data_state.write().unwrap();
-    if let Some(ref mut gyro_state) = *data_guard {
-        if let Some(yaw) = patch.yaw { gyro_state.yaw = yaw; }
-        if let Some(pitch) = patch.pitch { gyro_state.pitch = pitch; }
-        if let Some(roll) = patch.roll { gyro_state.roll = roll; }
-        if let Some(yaw_rate) = patch.yaw_rate { gyro_state.yaw_rate = yaw_rate; }
-        if let Some(is_running) = patch.is_running { gyro_state.is_running = is_running; }
-        gyro_state.last_update = Utc::now();
-
-        HttpResponse::Ok().json(serde_json::json!({
-            "message": "Gyro updated successfully.",
-            "data": gyro_state.clone()
-        }))
+/// [PATCH] /api/gyro
+pub async fn update_gyro(state: web::Data<AppState>, body: web::Json<UpdateGyroPayload>) -> impl Responder {
+    let mut guard = state.gyro_data.write().await;
+    if let Some(data) = guard.as_mut() {
+        let patch = body.into_inner();
+        if let Some(val) = patch.yaw { data.yaw = val; }
+        if let Some(val) = patch.pitch { data.pitch = val; }
+        if let Some(val) = patch.roll { data.roll = val; }
+        if let Some(val) = patch.yaw_rate { data.yaw_rate = val; }
+        if let Some(val) = patch.is_running { data.is_running = val; }
+        data.last_update = Utc::now();
+        let updated_data = data.clone();
+        drop(guard);
+        let _ = state.gyro_update_tx.send(updated_data.clone());
+        HttpResponse::Ok().json(serde_json::json!({"data": updated_data}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({ "message": "Gyro Data not found to update" }))
+        HttpResponse::NotFound().json(serde_json::json!({"message": "Gyro Data not found to update"}))
     }
 }
 
-pub async fn delete_gyro(state: web::Data<SharedGyroState>) -> impl Responder {
-    let mut guard = state.write().unwrap();
-    if guard.is_some() {
-        *guard = None;
-        HttpResponse::Ok().json(serde_json::json!({ "message": "Success to delete Gyro live tracking." }))
+/// [DELETE] /api/gyro
+pub async fn delete_gyro(state: web::Data<AppState>) -> impl Responder {
+    if state.gyro_data.write().await.take().is_some() {
+        HttpResponse::Ok().json(serde_json::json!({"message": "Success to delete Gyro data."}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({ "message": "Gyro running currently not found" }))
+        HttpResponse::NotFound().json(serde_json::json!({"message": "Gyro data not found"}))
     }
 }
