@@ -1,9 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-// DIHAPUS: Tipe alias Shared... tidak lagi dibutuhkan karena kita pakai AppState.
-
-// DIUBAH: Ganti nama GpsState menjadi GpsData agar lebih intuitif sebagai data transfer object (DTO).
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GpsData {
     pub latitude: f64,
@@ -13,10 +10,8 @@ pub struct GpsData {
     pub variation: f64,
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    // DIHAPUS: `calculation_rate_ms` tidak perlu disimpan di sini, karena sudah ada di GpsConfig.
 }
 
-// Struct GpsConfig sudah bagus, tidak perlu diubah.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GpsConfig {
     pub ip: Option<String>,
@@ -35,13 +30,12 @@ impl Default for GpsConfig {
             port: None,
             username: None,
             password: None,
-            update_rate: Some(1000), // Default 1 detik
-            topics: Some(vec!["vessel/gps/data".to_string()]), // Default topic
+            update_rate: None, 
+            topics: None, 
         }
     }
 }
 
-// Struct untuk request API, diubah agar lebih sesuai dengan ekspektasi API Anda.
 #[derive(Deserialize, Debug)]
 pub struct CreateGpsPayload {
     pub latitude: f64,

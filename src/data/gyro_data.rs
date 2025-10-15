@@ -29,8 +29,8 @@ impl Default for GyroConfig {
             port: None,
             username: None,
             password: None,
-            update_rate: Some(1000),
-            topics: Some(vec!["vessel/gyro/data".to_string()]),
+            update_rate: None, 
+            topics: None,  
         }
     }
 }

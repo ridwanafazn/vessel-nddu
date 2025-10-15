@@ -1,5 +1,5 @@
 use crate::data::gps_data::GpsData;
-use chrono::{Datelike, Utc};
+use chrono::{DateTime, Utc, Datelike};
 use std::f64::consts::PI;
 use time::{Date, Month};
 use uom::si::angle::degree;
@@ -7,27 +7,35 @@ use uom::si::f32::*;
 use uom::si::length::meter;
 use world_magnetic_model::GeomagneticField;
 
-const EARTH_RADIUS: f64 = 6_371_000.0;
+const EARTH_RADIUS_M: f64 = 6_371_000.0;
 
+/// --- Utility ---
+#[inline]
 fn deg_to_rad(deg: f64) -> f64 {
     deg * PI / 180.0
 }
 
+#[inline]
 fn rad_to_deg(rad: f64) -> f64 {
     rad * 180.0 / PI
 }
 
-pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &chrono::DateTime<Utc>) -> f64 {
-    let month = match Month::try_from(date_time.month() as u8) {
-        Ok(m) => m,
-        Err(_) => return 0.0,
-    };
-    let day = date_time.day() as u8;
+/// Normalisasi heading/course agar selalu di [0, 360)
+fn normalize_course(course: f64) -> f64 {
+    ((course % 360.0) + 360.0) % 360.0
+}
 
-    let date = match Date::from_calendar_date(date_time.year(), month, day) {
-        Ok(d) => d,
-        Err(_) => return 0.0,
-    };
+/// Batasi kecepatan (knots)
+fn clamp_speed(sog: f64) -> f64 {
+    sog.clamp(0.0, 102.2)
+}
+
+/// --- Magnetic Variation ---
+pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &DateTime<Utc>) -> f64 {
+    let month = Month::try_from(date_time.month() as u8).unwrap_or(Month::January);
+    let day = date_time.day() as u8;
+    let date = Date::from_calendar_date(date_time.year(), month, day)
+        .unwrap_or_else(|_| Date::from_calendar_date(2025, Month::January, 1).unwrap());
 
     let height_q = Length::new::<meter>(0.0);
     let lat_q = Angle::new::<degree>(lat as f32);
@@ -39,27 +47,49 @@ pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &chrono::Date
     }
 }
 
-// DIUBAH: Fungsi sekarang menerima `dt_seconds` (delta time in seconds) sebagai argumen.
+/// --- GPS Update Linear Model (versi lama yang stabil) ---
 pub fn calculate_next_gps_state(gps_data: &mut GpsData, dt_seconds: f64) {
-    // DIPERBAIKI: Semua variabel `data` diganti menjadi `gps_data`.
-    let speed_mps = gps_data.sog * 0.514444; // Konversi knot ke m/s
+    gps_data.sog = clamp_speed(gps_data.sog);
+    gps_data.cog = normalize_course(gps_data.cog);
+
+    // speed (knots → m/s)
+    let speed_mps = gps_data.sog * 0.514444;
     let distance = speed_mps * dt_seconds;
 
-    let lat_rad = deg_to_rad(gps_data.latitude);
-    let lon_rad = deg_to_rad(gps_data.longitude);
+    // arah dalam radian
     let course_rad = deg_to_rad(gps_data.cog);
-    let angular_distance = distance / EARTH_RADIUS;
 
-    let new_lat_rad = (lat_rad.sin() * angular_distance.cos()
-        + lat_rad.cos() * angular_distance.sin() * course_rad.cos())
-    .asin();
+    // delta posisi
+    let delta_lat = (distance / EARTH_RADIUS_M) * course_rad.cos();
+    let delta_lon = if gps_data.latitude.abs() < 90.0 {
+        (distance / (EARTH_RADIUS_M * deg_to_rad(gps_data.latitude).cos())) * course_rad.sin()
+    } else {
+        0.0
+    };
 
-    let new_lon_rad = lon_rad
-        + (course_rad.sin() * angular_distance.sin() * lat_rad.cos())
-            .atan2(angular_distance.cos() - lat_rad.sin() * new_lat_rad.sin());
+    let mut new_lat = gps_data.latitude + rad_to_deg(delta_lat);
+    let mut new_lon = gps_data.longitude + rad_to_deg(delta_lon);
 
-    gps_data.latitude = rad_to_deg(new_lat_rad).clamp(-90.0, 90.0);
-    gps_data.longitude = (rad_to_deg(new_lon_rad) + 180.0).rem_euclid(360.0) - 180.0;
+    // --- Pantulan di kutub ---
+    if new_lat > 90.0 {
+        new_lat = 180.0 - new_lat;
+        gps_data.cog = normalize_course(gps_data.cog + 180.0);
+        new_lon = (new_lon + 180.0).rem_euclid(360.0) - 180.0;
+        println!("[POLE] Crossed North Pole → Flip COG {:.2}", gps_data.cog);
+    } else if new_lat < -90.0 {
+        new_lat = -180.0 - new_lat;
+        gps_data.cog = normalize_course(gps_data.cog + 180.0);
+        new_lon = (new_lon + 180.0).rem_euclid(360.0) - 180.0;
+        println!("[POLE] Crossed South Pole → Flip COG {:.2}", gps_data.cog);
+    }
+
+    // --- Normalisasi Longitude ke [-180, 180] ---
+    new_lon = ((new_lon + 180.0).rem_euclid(360.0)) - 180.0;
+
+    // --- Update Struct ---
+    gps_data.latitude = new_lat.clamp(-90.0, 90.0);
+    gps_data.longitude = new_lon;
     gps_data.last_update = Utc::now();
-    gps_data.variation = calculate_magnetic_variation(gps_data.latitude, gps_data.longitude, &gps_data.last_update);
+    gps_data.variation =
+        calculate_magnetic_variation(gps_data.latitude, gps_data.longitude, &gps_data.last_update);
 }

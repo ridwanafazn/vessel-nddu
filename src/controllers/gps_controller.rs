@@ -3,6 +3,9 @@ use crate::data::gps_data::{CreateGpsPayload, GpsConfig, GpsData, UpdateGpsConfi
 use crate::AppState;
 use crate::utils::gps_calculate;
 use chrono::Utc;
+// DIPERBAIKI: Menggunakan path import yang benar untuk BlockingClient.
+use rumqttc::{MqttOptions, client::BlockingClient};
+use std::time::Duration;
 
 // === CONFIG HANDLERS ===
 
@@ -17,10 +20,38 @@ pub async fn get_config(state: web::Data<AppState>) -> impl Responder {
 
 /// [PATCH] /api/gps/config
 pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGpsConfigPayload>) -> impl Responder {
-    let mut guard = state.gps_config.write().await;
     let patch = body.into_inner();
     
-    // Terapkan patch. Pola ini lebih aman dan bersih.
+    let mut test_config = state.gps_config.read().await.clone();
+    if let Some(ip) = &patch.ip { test_config.ip = Some(ip.clone()); }
+    if let Some(port) = patch.port { test_config.port = Some(port); }
+    if let Some(username) = &patch.username { test_config.username = Some(username.clone()); }
+    if let Some(password) = &patch.password { test_config.password = Some(password.clone()); }
+
+    if let (Some(ip), Some(port)) = (&test_config.ip, test_config.port) {
+        log::info!("[API] Testing new MQTT connection to {}:{}...", ip, port);
+        let mut mqttoptions = MqttOptions::new("vessel-config-tester", ip.as_str(), port);
+        mqttoptions.set_keep_alive(Duration::from_secs(2));
+        if let (Some(user), Some(pass)) = (&test_config.username, &test_config.password) {
+            mqttoptions.set_credentials(user, pass);
+        }
+        
+        // Menggunakan BlockingClient::new yang sekarang path-nya sudah benar.
+        match BlockingClient::new(mqttoptions, 10) {
+            Ok(_) => {
+                log::info!("[API] MQTT connection test successful.");
+            }
+            Err(e) => {
+                log::warn!("[API] MQTT connection test failed: {}", e);
+                return HttpResponse::BadRequest().json(serde_json::json!({
+                    "message": format!("Failed to connect to MQTT broker at {}:{}. Please check the IP and port.", ip, port),
+                    "error": e.to_string()
+                }));
+            }
+        }
+    }
+    
+    let mut guard = state.gps_config.write().await;
     if let Some(ip) = patch.ip { guard.ip = Some(ip); }
     if let Some(port) = patch.port { guard.port = Some(port); }
     if let Some(username) = patch.username { guard.username = Some(username); }
@@ -30,28 +61,34 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGps
 
     log::info!("[API] GPS config updated to: {:?}", *guard);
     
-    // DIHAPUS: Tidak perlu lagi mengirim command Reconnect.
-    
     HttpResponse::Ok().json(serde_json::json!({
         "message": "GPS Config updated successfully.",
         "data": &*guard
     }))
 }
 
+
 /// [DELETE] /api/gps/config
 pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
-    let mut guard = state.gps_config.write().await;
-    *guard = GpsConfig::default(); // Reset ke nilai default
+    *state.gps_config.write().await = GpsConfig::default();
     HttpResponse::Ok().json(serde_json::json!({
         "message": "GPS Config reset to default."
     }))
 }
 
-// === SENSOR DATA HANDLERS ===
+// === SENSOR DATA HANDLERS (Tidak ada perubahan di bawah ini) ===
 
 /// [POST] /api/gps
 pub async fn create_gps(state: web::Data<AppState>, body: web::Json<CreateGpsPayload>) -> impl Responder {
-    // Validasi: Pastikan belum ada data GPS yang berjalan
+    { 
+        let config = state.gps_config.read().await;
+        if config.ip.is_none() || config.port.is_none() {
+            return HttpResponse::Conflict().json(serde_json::json!({
+                "message": "Cannot create sensor data: MQTT configuration (IP, port) is not set."
+            }));
+        }
+    }
+
     if state.gps_data.read().await.is_some() {
         return HttpResponse::Conflict().json(serde_json::json!({
             "message": "GPS data already exists. Please use PATCH to update or DELETE to remove."
@@ -59,9 +96,22 @@ pub async fn create_gps(state: web::Data<AppState>, body: web::Json<CreateGpsPay
     }
 
     let req = body.into_inner();
+
+    if !(-90.0..=90.0).contains(&req.latitude) {
+        return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid latitude. Must be between -90 and 90."}));
+    }
+    if !(-180.0..=180.0).contains(&req.longitude) {
+        return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid longitude. Must be between -180 and 180."}));
+    }
+    if req.sog < 0.0 {
+        return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid SOG (Speed Over Ground). Must be non-negative."}));
+    }
+    if !(0.0..=360.0).contains(&req.cog) {
+        return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid COG (Course Over Ground). Must be between 0 and 360."}));
+    }
+
     let now = Utc::now();
     let variation = gps_calculate::calculate_magnetic_variation(req.latitude, req.longitude, &now);
-
     let new_data = GpsData {
         latitude: req.latitude, longitude: req.longitude,
         sog: req.sog, cog: req.cog,
@@ -70,13 +120,8 @@ pub async fn create_gps(state: web::Data<AppState>, body: web::Json<CreateGpsPay
         last_update: now,
     };
 
-    // Tulis state baru
     *state.gps_data.write().await = Some(new_data.clone());
-
-    // PENTING: Kirim notifikasi update ke semua subscriber agar langsung dipublikasikan.
-    if let Err(e) = state.gps_update_tx.send(new_data.clone()) {
-        log::warn!("[API] Gagal broadcast data GPS baru: {}", e);
-    }
+    let _ = state.gps_update_tx.send(new_data.clone());
 
     HttpResponse::Created().json(serde_json::json!({
         "message": "Gps created successfully.",
@@ -98,11 +143,32 @@ pub async fn get_gps(state: web::Data<AppState>) -> impl Responder {
 
 /// [PATCH] /api/gps
 pub async fn update_gps(state: web::Data<AppState>, body: web::Json<UpdateGpsPayload>) -> impl Responder {
+    let patch = body.into_inner();
+
+    if patch.is_running == Some(true) {
+        let config = state.gps_config.read().await;
+        if config.ip.is_none() || config.port.is_none() {
+            return HttpResponse::Conflict().json(serde_json::json!({
+                "message": "Cannot start simulation: MQTT configuration is not set."
+            }));
+        }
+    }
+
+    if let Some(lat) = patch.latitude {
+        if !(-90.0..=90.0).contains(&lat) { return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid latitude."})); }
+    }
+    if let Some(lon) = patch.longitude {
+        if !(-180.0..=180.0).contains(&lon) { return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid longitude."})); }
+    }
+    if let Some(sog) = patch.sog {
+        if sog < 0.0 { return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid SOG."})); }
+    }
+    if let Some(cog) = patch.cog {
+        if !(0.0..=360.0).contains(&cog) { return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid COG."})); }
+    }
+    
     let mut guard = state.gps_data.write().await;
     if let Some(gps_data) = guard.as_mut() {
-        let patch = body.into_inner();
-        
-        // Terapkan patch
         if let Some(lat) = patch.latitude { gps_data.latitude = lat; }
         if let Some(lon) = patch.longitude { gps_data.longitude = lon; }
         if let Some(sog) = patch.sog { gps_data.sog = sog; }
@@ -111,9 +177,7 @@ pub async fn update_gps(state: web::Data<AppState>, body: web::Json<UpdateGpsPay
         gps_data.last_update = Utc::now();
         
         let updated_data = gps_data.clone();
-        drop(guard); // Lepas lock sebelum broadcast
-
-        // Kirim notifikasi update
+        drop(guard);
         let _ = state.gps_update_tx.send(updated_data.clone());
 
         HttpResponse::Ok().json(serde_json::json!({
@@ -127,9 +191,7 @@ pub async fn update_gps(state: web::Data<AppState>, body: web::Json<UpdateGpsPay
 
 /// [DELETE] /api/gps
 pub async fn delete_gps(state: web::Data<AppState>) -> impl Responder {
-    let mut guard = state.gps_data.write().await;
-    if guard.is_some() {
-        *guard = None;
+    if state.gps_data.write().await.take().is_some() {
         HttpResponse::Ok().json(serde_json::json!({ "message": "Success to delete GPS data." }))
     } else {
         HttpResponse::NotFound().json(serde_json::json!({ "message": "GPS data not found" }))

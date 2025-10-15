@@ -14,10 +14,11 @@ futures-util = "0.3.31"
 actix-cors = "0.6"
 http = "0.2.12"
 reqwest = { version = "0.11", features = ["json"] }
-wmm = { version = "0.2", default-features = false } 
+wmm = { version = "0.2", default-features = false }
 time = "0.3"
 lazy_static = "1.5.0"
-rumqttc = "0.24"
+# Mengaktifkan fitur 'blocking-client' yang diperlukan untuk koneksi MQTT sinkron
+rumqttc = { version = "0.25.0", features = ["blocking-client"] }
 world_magnetic_model = "0.4.0"
 uom = "0.37.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -27,3 +28,4 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 log = "0.4.28"
 env_logger = "0.11.8"
+
