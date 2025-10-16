@@ -1,11 +1,8 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::data::gyro_data::{CreateGyroPayload, GyroConfig, GyroData, UpdateGyroConfigPayload, UpdateGyroPayload};
-use crate::AppState;
+use crate::{AppState, ConfigUpdate};
 use chrono::Utc;
-// DIPERBAIKI: Menggunakan path import yang benar untuk BlockingClient.
-use rumqttc::{MqttOptions, client::BlockingClient};
-use std::time::Duration;
-
+use crate::utils::mqtt_manager::MqttManager;
 
 // === CONFIG HANDLERS ===
 
@@ -28,26 +25,21 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGyr
     if let Some(username) = &patch.username { test_config.username = Some(username.clone()); }
     if let Some(password) = &patch.password { test_config.password = Some(password.clone()); }
 
-    if let (Some(ip), Some(port)) = (&test_config.ip, test_config.port) {
+    if let (Some(ip), Some(port)) = (test_config.ip.clone(), test_config.port) {
         log::info!("[API] Testing new MQTT connection to {}:{}...", ip, port);
-        let mut mqttoptions = MqttOptions::new("vessel-config-tester-gyro", ip.as_str(), port);
-        mqttoptions.set_keep_alive(Duration::from_secs(2));
-        if let (Some(user), Some(pass)) = (&test_config.username, &test_config.password) {
-            mqttoptions.set_credentials(user, pass);
-        }
         
-        match BlockingClient::new(mqttoptions, 10) {
-            Ok(_) => {
-                log::info!("[API] MQTT connection test successful.");
-            }
-            Err(e) => {
-                log::warn!("[API] MQTT connection test failed: {}", e);
-                return HttpResponse::BadRequest().json(serde_json::json!({
-                    "message": format!("Failed to connect to MQTT broker at {}:{}.", ip, port),
-                    "error": e.to_string()
-                }));
-            }
+        let test_result = tokio::task::spawn_blocking(move || {
+            MqttManager::test_connection(&ip, port)
+        }).await.expect("Task spawn_blocking panik, ini seharusnya tidak terjadi.");
+
+        if let Err(e) = test_result {
+            log::warn!("[API] Connection test failed: {}", e);
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "message": format!("Failed to connect to broker at {}:{}. The port might be closed or the host is unreachable.", test_config.ip.as_deref().unwrap_or_default(), test_config.port.unwrap_or_default()),
+                "error": e.to_string()
+            }));
         }
+        log::info!("[API] Connection test successful.");
     }
     
     let mut guard = state.gyro_config.write().await;
@@ -60,6 +52,8 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGyr
     
     log::info!("[API] Gyro config updated to: {:?}", *guard);
     
+    let _ = state.config_update_tx.send(ConfigUpdate::Gyro);
+    
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Gyro Config updated successfully.",
         "data": &*guard
@@ -68,11 +62,24 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGyr
 
 /// [DELETE] /api/gyro/config
 pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
+    // Langkah 1: Reset konfigurasi ke default.
     *state.gyro_config.write().await = GyroConfig::default();
-    HttpResponse::Ok().json(serde_json::json!({"message": "Gyro Config reset to default."}))
+
+    // Langkah 2 (BARU): Hapus juga data sensor yang terkait.
+    state.gyro_data.write().await.take();
+    log::info!("[API] Gyro config and associated data have been reset.");
+
+    // Langkah 3: Kirim sinyal agar service di background tahu konfigurasinya sudah hilang.
+    let _ = state.config_update_tx.send(ConfigUpdate::Gyro);
+
+    // Langkah 4 (BARU): Perbarui pesan respon agar lebih informatif.
+    HttpResponse::Ok().json(serde_json::json!({
+        "message": "Gyro config and associated sensor data have been reset."
+    }))
 }
 
-// === SENSOR DATA HANDLERS (Tidak ada perubahan di bawah ini) ===
+// === SENSOR DATA HANDLERS ===
+// (Tidak ada perubahan di fungsi-fungsi di bawah ini)
 
 /// [POST] /api/gyro
 pub async fn create_gyro(state: web::Data<AppState>, body: web::Json<CreateGyroPayload>) -> impl Responder {
@@ -123,7 +130,6 @@ pub async fn get_gyro(state: web::Data<AppState>) -> impl Responder {
 /// [PATCH] /api/gyro
 pub async fn update_gyro(state: web::Data<AppState>, body: web::Json<UpdateGyroPayload>) -> impl Responder {
     let patch = body.into_inner();
-
     if patch.is_running == Some(true) {
         let config = state.gyro_config.read().await;
         if config.ip.is_none() || config.port.is_none() {
@@ -163,3 +169,4 @@ pub async fn delete_gyro(state: web::Data<AppState>) -> impl Responder {
         HttpResponse::NotFound().json(serde_json::json!({"message": "Gyro data not found"}))
     }
 }
+

@@ -17,8 +17,10 @@ reqwest = { version = "0.11", features = ["json"] }
 wmm = { version = "0.2", default-features = false }
 time = "0.3"
 lazy_static = "1.5.0"
-# Mengaktifkan fitur 'blocking-client' yang diperlukan untuk koneksi MQTT sinkron
-rumqttc = { version = "0.25.0", features = ["blocking-client"] }
+
+# DIPERBAIKI (FINAL): Kembali ke versi stabil tanpa fitur tambahan.
+rumqttc = "0.24.0"
+
 world_magnetic_model = "0.4.0"
 uom = "0.37.0"
 chrono = { version = "0.4", features = ["serde"] }

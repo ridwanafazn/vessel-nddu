@@ -3,7 +3,3 @@ pub mod gps_service;
 // pub mod baro_service;
 pub mod gyro_service;
 // pub mod thermal_service;
-#[derive(Debug, Clone)]
-pub enum MqttCommand {
-    Reconnect,
-}

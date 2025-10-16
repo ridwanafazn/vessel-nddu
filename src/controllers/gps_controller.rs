@@ -1,11 +1,9 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::data::gps_data::{CreateGpsPayload, GpsConfig, GpsData, UpdateGpsConfigPayload, UpdateGpsPayload};
-use crate::AppState;
+use crate::{AppState, ConfigUpdate};
 use crate::utils::gps_calculate;
 use chrono::Utc;
-// DIPERBAIKI: Menggunakan path import yang benar untuk BlockingClient.
-use rumqttc::{MqttOptions, client::BlockingClient};
-use std::time::Duration;
+use crate::utils::mqtt_manager::MqttManager;
 
 // === CONFIG HANDLERS ===
 
@@ -28,27 +26,22 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGps
     if let Some(username) = &patch.username { test_config.username = Some(username.clone()); }
     if let Some(password) = &patch.password { test_config.password = Some(password.clone()); }
 
-    if let (Some(ip), Some(port)) = (&test_config.ip, test_config.port) {
+    if let (Some(ip), Some(port)) = (test_config.ip.clone(), test_config.port) {
         log::info!("[API] Testing new MQTT connection to {}:{}...", ip, port);
-        let mut mqttoptions = MqttOptions::new("vessel-config-tester", ip.as_str(), port);
-        mqttoptions.set_keep_alive(Duration::from_secs(2));
-        if let (Some(user), Some(pass)) = (&test_config.username, &test_config.password) {
-            mqttoptions.set_credentials(user, pass);
+        
+        let test_result = tokio::task::spawn_blocking(move || {
+            MqttManager::test_connection(&ip, port)
+        }).await.expect("Task spawn_blocking panik, ini seharusnya tidak terjadi.");
+
+        if let Err(e) = test_result {
+            log::warn!("[API] Connection test failed: {}", e);
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "message": format!("Failed to connect to broker at {}:{}. The port might be closed or the host is unreachable.", test_config.ip.as_deref().unwrap_or_default(), test_config.port.unwrap_or_default()),
+                "error": e.to_string()
+            }));
         }
         
-        // Menggunakan BlockingClient::new yang sekarang path-nya sudah benar.
-        match BlockingClient::new(mqttoptions, 10) {
-            Ok(_) => {
-                log::info!("[API] MQTT connection test successful.");
-            }
-            Err(e) => {
-                log::warn!("[API] MQTT connection test failed: {}", e);
-                return HttpResponse::BadRequest().json(serde_json::json!({
-                    "message": format!("Failed to connect to MQTT broker at {}:{}. Please check the IP and port.", ip, port),
-                    "error": e.to_string()
-                }));
-            }
-        }
+        log::info!("[API] Connection test successful.");
     }
     
     let mut guard = state.gps_config.write().await;
@@ -61,22 +54,35 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGps
 
     log::info!("[API] GPS config updated to: {:?}", *guard);
     
+    let _ = state.config_update_tx.send(ConfigUpdate::Gps);
+    
     HttpResponse::Ok().json(serde_json::json!({
         "message": "GPS Config updated successfully.",
         "data": &*guard
     }))
 }
 
-
 /// [DELETE] /api/gps/config
 pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
+    // Langkah 1: Reset konfigurasi ke default.
     *state.gps_config.write().await = GpsConfig::default();
+    
+    // Langkah 2 (BARU): Hapus juga data sensor yang terkait.
+    // .take() akan mengganti nilai di dalam Some(data) menjadi None.
+    state.gps_data.write().await.take();
+    log::info!("[API] GPS config and associated data have been reset.");
+
+    // Langkah 3: Kirim sinyal agar service di background tahu konfigurasinya sudah hilang.
+    let _ = state.config_update_tx.send(ConfigUpdate::Gps);
+
+    // Langkah 4 (BARU): Perbarui pesan respon agar lebih informatif.
     HttpResponse::Ok().json(serde_json::json!({
-        "message": "GPS Config reset to default."
+        "message": "GPS config and associated sensor data have been reset."
     }))
 }
 
-// === SENSOR DATA HANDLERS (Tidak ada perubahan di bawah ini) ===
+// === SENSOR DATA HANDLERS ===
+// (Tidak ada perubahan di fungsi-fungsi di bawah ini)
 
 /// [POST] /api/gps
 pub async fn create_gps(state: web::Data<AppState>, body: web::Json<CreateGpsPayload>) -> impl Responder {
@@ -197,3 +203,4 @@ pub async fn delete_gps(state: web::Data<AppState>) -> impl Responder {
         HttpResponse::NotFound().json(serde_json::json!({ "message": "GPS data not found" }))
     }
 }
+

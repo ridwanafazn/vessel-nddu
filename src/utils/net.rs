@@ -47,13 +47,13 @@ pub async fn handle_websocket_connection(stream: TcpStream, clients: Clients) {
 }
 
 // Fungsi TCP tidak berubah
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-pub async fn handle_tcp_connection(mut socket: TcpStream) {
-    let mut buffer = [0; 1024];
-    match socket.read(&mut buffer).await {
-        Ok(n) if n > 0 => {
-            let _ = socket.write_all(b"TCP received").await;
-        }
-        _ => {}
-    }
-}
+// use tokio::io::{AsyncReadExt, AsyncWriteExt};
+// pub async fn handle_tcp_connection(mut socket: TcpStream) {
+//     let mut buffer = [0; 1024];
+//     match socket.read(&mut buffer).await {
+//         Ok(n) if n > 0 => {
+//             let _ = socket.write_all(b"TCP received").await;
+//         }
+//         _ => {}
+//     }
+// }

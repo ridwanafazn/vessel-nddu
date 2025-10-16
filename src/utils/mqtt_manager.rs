@@ -1,28 +1,26 @@
-use rumqttc::{AsyncClient, QoS};
-use std::error::Error;
+use std::net::TcpStream;
+use std::time::Duration;
+use std::io;
 
-/// BARU: MqttManager yang jauh lebih sederhana.
-/// Fungsinya hanya sebagai wrapper untuk mempermudah publikasi.
-/// Logika koneksi sudah ditangani oleh eventloop di main.rs.
-#[derive(Clone)]
-pub struct MqttManager {
-    client: AsyncClient,
-}
+pub struct MqttManager;
 
 impl MqttManager {
-    pub fn new(client: AsyncClient) -> Self {
-        Self { client }
-    }
+    /// Mengetes koneksi TCP langsung ke IP dan Port yang diberikan.
+    /// Ini adalah tes jaringan yang sesungguhnya, bukan hanya validasi opsi.
+    /// Fungsi ini sengaja dibuat sinkron (blocking) karena tes harus selesai sebelum API merespon.
+    pub fn test_connection(ip: &str, port: u16) -> Result<(), io::Error> {
+        // Gabungkan IP dan port menjadi satu alamat string.
+        let address = format!("{}:{}", ip, port);
+        // Set timeout 3 detik agar API tidak menunggu terlalu lama jika host tidak merespon.
+        let timeout = Duration::from_secs(3);
 
-    /// Mempublikasikan pesan ke satu topic.
-    pub async fn publish(
-        &self,
-        topic: &str,
-        payload: String,
-    ) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.client
-            .publish(topic, QoS::AtLeastOnce, false, payload.into_bytes())
-            .await?;
-        Ok(())
+        // TcpStream::connect_timeout akan mencoba membuat koneksi TCP.
+        // Jika gagal (karena port ditutup, host tidak ada, firewall, dll.), ia akan mengembalikan Err.
+        // Jika berhasil, koneksi akan langsung ditutup saat `_stream` di-drop (keluar dari scope).
+        match TcpStream::connect_timeout(&address.parse().expect("Invalid socket address"), timeout) {
+            Ok(_stream) => Ok(()), // Koneksi berhasil, kembalikan Ok.
+            Err(e) => Err(e),      // Koneksi gagal, teruskan error IO-nya.
+        }
     }
 }
+

@@ -1,38 +1,35 @@
-// DIUBAH: Path import disesuaikan dengan struktur crate yang benar.
 use crate::AppState;
 use crate::utils;
 use std::time::Duration;
 use tokio::time::sleep;
+use rumqttc::{AsyncClient, MqttOptions, QoS};
+use tokio::task::JoinHandle;
+// DIPERBAIKI: Path impor untuk ConfigUpdate.
+use crate::ConfigUpdate;
 
-/// Menjalankan semua background task yang berhubungan dengan GPS (kalkulasi & publikasi).
+
+/// Menjalankan semua background task yang berhubungan dengan GPS.
 pub fn run_gps_tasks(state: AppState) {
-    // Task 1: Melakukan kalkulasi data GPS secara periodik sesuai `update_rate`.
+    // Task 1: Melakukan kalkulasi data GPS secara periodik (TIDAK BERUBAH).
     let calc_state = state.clone();
     tokio::spawn(async move {
         loop {
-            // Ambil update_rate dari config di SETIAP iterasi.
             let update_rate_ms = {
                 let config = calc_state.gps_config.read().await;
-                config.update_rate.unwrap_or(1000) // Default 1 detik jika tidak diset
+                config.update_rate.unwrap_or(1000)
             };
             
-            // Tidur sesuai durasi yang dinamis
             sleep(Duration::from_millis(update_rate_ms)).await;
 
-            // Lakukan kalkulasi
             let mut guard = calc_state.gps_data.write().await;
             if let Some(ref mut gps_data) = *guard {
                 if gps_data.is_running {
-                    // BARU: Hitung delta time (dt) dalam detik dari update_rate.
                     let dt_seconds = update_rate_ms as f64 / 1000.0;
-                    
-                    // DIUBAH: Panggil fungsi kalkulasi dengan argumen dt_seconds yang baru.
                     utils::gps_calculate::calculate_next_gps_state(gps_data, dt_seconds);
                     
                     let updated_data = gps_data.clone();
-                    drop(guard); // Lepas lock secepatnya
+                    drop(guard); 
 
-                    // Kirim notifikasi update ke semua subscriber (task publikasi).
                     if let Err(e) = calc_state.gps_update_tx.send(updated_data) {
                         log::warn!("[GPS Calc Task] Gagal mengirim update, tidak ada subscriber aktif: {}", e);
                     }
@@ -41,44 +38,81 @@ pub fn run_gps_tasks(state: AppState) {
         }
     });
 
-    // Task 2: Mendengarkan notifikasi update dan mempublikasikannya.
-    let pub_state = state.clone();
+    // Task 2: Manajer koneksi dan publisher.
+    let pub_state = state;
     tokio::spawn(async move {
-        let mut rx = pub_state.gps_update_tx.subscribe();
-        log::info!("[GPS Pub Task] Siap mendengarkan update GPS...");
+        let mut active_client: Option<AsyncClient> = None;
+        let mut eventloop_handle: Option<JoinHandle<()>> = None;
+
+        let mut config_rx = pub_state.config_update_tx.subscribe();
+        let mut data_rx = pub_state.gps_update_tx.subscribe();
+
+        log::info!("[GPS Manager Task] Service dimulai, menunggu konfigurasi dan data...");
 
         loop {
-            // Task ini "tidur" sampai ada pesan baru di channel. Sangat efisien.
-            match rx.recv().await {
-                Ok(gps_data) => {
-                    log::debug!("[GPS Pub Task] Menerima update data GPS untuk dipublikasikan.");
-                    
-                    // Ambil config topic
-                    let topics = {
-                        let config = pub_state.gps_config.read().await;
-                        config.topics.clone().unwrap_or_default()
-                    };
-
-                    // Buat payload pesan sekali saja
-                    let message_payload = serde_json::json!({ "type": "gps_update", "data": gps_data });
-                    let message_string = message_payload.to_string();
-
-                    // Publikasi ke WebSocket
-                    utils::net::broadcast_ws_message(&pub_state.ws_clients, message_string.clone()).await;
-
-                    // Publikasi ke MQTT
-                    for topic in topics {
-                         if let Err(e) = pub_state.mqtt_manager.publish(&topic, message_string.clone()).await {
-                            log::error!("[GPS Pub Task] Gagal publish ke MQTT topic '{}': {:?}", topic, e);
-                        }
+            if active_client.is_none() {
+                let config = pub_state.gps_config.read().await;
+                if let (Some(ip), Some(port)) = (config.ip.as_deref(), config.port) {
+                    log::info!("[GPS Manager Task] Mencoba konek ke MQTT broker di {}:{}", ip, port);
+                    let mut mqttoptions = MqttOptions::new("vessel-gps-service", ip, port);
+                    mqttoptions.set_keep_alive(Duration::from_secs(5));
+                    if let (Some(user), Some(pass)) = (config.username.as_ref(), config.password.as_ref()) {
+                        mqttoptions.set_credentials(user, pass);
                     }
 
-                    log::info!("[GPS Pub Task] Berhasil mempublikasikan update GPS.");
+                    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
+                    
+                    let handle = tokio::spawn(async move {
+                        loop {
+                            if let Err(e) = eventloop.poll().await {
+                                log::error!("[GPS MQTT EventLoop] Error koneksi: {}. Mencoba reconnect...", e);
+                                tokio::time::sleep(Duration::from_secs(1)).await;
+                            }
+                        }
+                    });
+
+                    log::info!("[GPS Manager Task] Berhasil konek ke MQTT broker.");
+                    eventloop_handle = Some(handle);
+                    active_client = Some(client);
+                }
+            }
+            
+            tokio::select! {
+                // DIPERBAIKI: Path enum yang benar digunakan di sini.
+                Ok(update_type) = config_rx.recv() => {
+                    if let ConfigUpdate::Gps = update_type {
+                        log::info!("[GPS Manager Task] Menerima sinyal update config. Akan melakukan reconnect...");
+                        if let Some(handle) = eventloop_handle.take() {
+                            handle.abort();
+                        }
+                        active_client = None;
+                    }
                 },
-                Err(e) => {
-                    log::error!("[GPS Pub Task] Error saat menerima update dari channel: {}", e);
+
+                Ok(gps_data) = data_rx.recv() => {
+                    if let Some(client) = &active_client {
+                        let topics = {
+                            let config = pub_state.gps_config.read().await;
+                            config.topics.clone().unwrap_or_default()
+                        };
+
+                        let message_payload = serde_json::json!({ "type": "gps_update", "data": &gps_data });
+                        let message_string = message_payload.to_string();
+
+                        utils::net::broadcast_ws_message(&pub_state.ws_clients, message_string.clone()).await;
+
+                        for topic in topics {
+                            log::debug!("[GPS Manager Task] Publikasi ke MQTT topic '{}'", topic);
+                            if let Err(e) = client.publish(&topic, QoS::AtLeastOnce, false, message_string.clone().into_bytes()).await {
+                                log::error!("[GPS Manager Task] Gagal publish ke MQTT topic '{}': {:?}", topic, e);
+                            }
+                        }
+                    } else {
+                        log::warn!("[GPS Manager Task] Menerima data, tetapi tidak ada koneksi MQTT aktif untuk publikasi.");
+                    }
                 }
             }
         }
     });
 }
+
