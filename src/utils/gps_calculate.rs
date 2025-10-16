@@ -9,7 +9,6 @@ use world_magnetic_model::GeomagneticField;
 
 const EARTH_RADIUS_M: f64 = 6_371_000.0;
 
-/// --- Utility ---
 #[inline]
 fn deg_to_rad(deg: f64) -> f64 {
     deg * PI / 180.0
@@ -47,19 +46,15 @@ pub fn calculate_magnetic_variation(lat: f64, lon: f64, date_time: &DateTime<Utc
     }
 }
 
-/// --- GPS Update Linear Model (versi lama yang stabil) ---
 pub fn calculate_next_gps_state(gps_data: &mut GpsData, dt_seconds: f64) {
     gps_data.sog = clamp_speed(gps_data.sog);
     gps_data.cog = normalize_course(gps_data.cog);
 
-    // speed (knots → m/s)
     let speed_mps = gps_data.sog * 0.514444;
     let distance = speed_mps * dt_seconds;
 
-    // arah dalam radian
     let course_rad = deg_to_rad(gps_data.cog);
 
-    // delta posisi
     let delta_lat = (distance / EARTH_RADIUS_M) * course_rad.cos();
     let delta_lon = if gps_data.latitude.abs() < 90.0 {
         (distance / (EARTH_RADIUS_M * deg_to_rad(gps_data.latitude).cos())) * course_rad.sin()
@@ -70,7 +65,6 @@ pub fn calculate_next_gps_state(gps_data: &mut GpsData, dt_seconds: f64) {
     let mut new_lat = gps_data.latitude + rad_to_deg(delta_lat);
     let mut new_lon = gps_data.longitude + rad_to_deg(delta_lon);
 
-    // --- Pantulan di kutub ---
     if new_lat > 90.0 {
         new_lat = 180.0 - new_lat;
         gps_data.cog = normalize_course(gps_data.cog + 180.0);
@@ -83,10 +77,8 @@ pub fn calculate_next_gps_state(gps_data: &mut GpsData, dt_seconds: f64) {
         println!("[POLE] Crossed South Pole → Flip COG {:.2}", gps_data.cog);
     }
 
-    // --- Normalisasi Longitude ke [-180, 180] ---
     new_lon = ((new_lon + 180.0).rem_euclid(360.0)) - 180.0;
 
-    // --- Update Struct ---
     gps_data.latitude = new_lat.clamp(-90.0, 90.0);
     gps_data.longitude = new_lon;
     gps_data.last_update = Utc::now();

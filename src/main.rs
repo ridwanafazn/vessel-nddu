@@ -13,7 +13,6 @@ use crate::data::gps_data::{GpsData, GpsConfig};
 use crate::data::gyro_data::{GyroData, GyroConfig};
 use crate::utils::net::{Clients, handle_websocket_connection};
 
-// DIUBAH: Dibuat `pub` agar bisa diakses dari modul lain di dalam crate.
 #[derive(Clone, Debug)]
 pub enum ConfigUpdate {
     Gps,

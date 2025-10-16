@@ -64,25 +64,16 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGps
 
 /// [DELETE] /api/gps/config
 pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
-    // Langkah 1: Reset konfigurasi ke default.
     *state.gps_config.write().await = GpsConfig::default();
-    
-    // Langkah 2 (BARU): Hapus juga data sensor yang terkait.
-    // .take() akan mengganti nilai di dalam Some(data) menjadi None.
     state.gps_data.write().await.take();
     log::info!("[API] GPS config and associated data have been reset.");
-
-    // Langkah 3: Kirim sinyal agar service di background tahu konfigurasinya sudah hilang.
     let _ = state.config_update_tx.send(ConfigUpdate::Gps);
-
-    // Langkah 4 (BARU): Perbarui pesan respon agar lebih informatif.
     HttpResponse::Ok().json(serde_json::json!({
         "message": "GPS config and associated sensor data have been reset."
     }))
 }
 
 // === SENSOR DATA HANDLERS ===
-// (Tidak ada perubahan di fungsi-fungsi di bawah ini)
 
 /// [POST] /api/gps
 pub async fn create_gps(state: web::Data<AppState>, body: web::Json<CreateGpsPayload>) -> impl Responder {

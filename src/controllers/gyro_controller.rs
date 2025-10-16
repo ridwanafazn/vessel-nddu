@@ -64,22 +64,15 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGyr
 pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
     // Langkah 1: Reset konfigurasi ke default.
     *state.gyro_config.write().await = GyroConfig::default();
-
-    // Langkah 2 (BARU): Hapus juga data sensor yang terkait.
     state.gyro_data.write().await.take();
     log::info!("[API] Gyro config and associated data have been reset.");
-
-    // Langkah 3: Kirim sinyal agar service di background tahu konfigurasinya sudah hilang.
     let _ = state.config_update_tx.send(ConfigUpdate::Gyro);
-
-    // Langkah 4 (BARU): Perbarui pesan respon agar lebih informatif.
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Gyro config and associated sensor data have been reset."
     }))
 }
 
 // === SENSOR DATA HANDLERS ===
-// (Tidak ada perubahan di fungsi-fungsi di bawah ini)
 
 /// [POST] /api/gyro
 pub async fn create_gyro(state: web::Data<AppState>, body: web::Json<CreateGyroPayload>) -> impl Responder {

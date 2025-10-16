@@ -13,7 +13,6 @@ fn clamp(value: f64, min: f64, max: f64) -> f64 {
     value.max(min).min(max)
 }
 
-// BARU: Menambahkan atribut untuk mengabaikan peringatan deprecated dari linter/compiler.
 #[allow(deprecated)]
 pub fn calculate_next_gyro_state(gyro_data: &mut GyroData, dt_seconds: f64) {
     let new_yaw = gyro_data.yaw + gyro_data.yaw_rate * dt_seconds;

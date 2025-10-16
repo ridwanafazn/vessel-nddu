@@ -4,13 +4,10 @@ use std::time::Duration;
 use tokio::time::sleep;
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use tokio::task::JoinHandle;
-// DIPERBAIKI: Path impor untuk ConfigUpdate.
 use crate::ConfigUpdate;
 
 
-/// Menjalankan semua background task yang berhubungan dengan GPS.
 pub fn run_gps_tasks(state: AppState) {
-    // Task 1: Melakukan kalkulasi data GPS secara periodik (TIDAK BERUBAH).
     let calc_state = state.clone();
     tokio::spawn(async move {
         loop {
@@ -38,7 +35,6 @@ pub fn run_gps_tasks(state: AppState) {
         }
     });
 
-    // Task 2: Manajer koneksi dan publisher.
     let pub_state = state;
     tokio::spawn(async move {
         let mut active_client: Option<AsyncClient> = None;
@@ -78,7 +74,6 @@ pub fn run_gps_tasks(state: AppState) {
             }
             
             tokio::select! {
-                // DIPERBAIKI: Path enum yang benar digunakan di sini.
                 Ok(update_type) = config_rx.recv() => {
                     if let ConfigUpdate::Gps = update_type {
                         log::info!("[GPS Manager Task] Menerima sinyal update config. Akan melakukan reconnect...");
