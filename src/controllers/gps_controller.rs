@@ -31,7 +31,7 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGps
         
         let test_result = tokio::task::spawn_blocking(move || {
             MqttManager::test_connection(&ip, port)
-        }).await.expect("Task spawn_blocking panik, ini seharusnya tidak terjadi.");
+        }).await.expect("Task spawn_blocking panic.");
 
         if let Err(e) = test_result {
             log::warn!("[API] Connection test failed: {}", e);
@@ -194,4 +194,3 @@ pub async fn delete_gps(state: web::Data<AppState>) -> impl Responder {
         HttpResponse::NotFound().json(serde_json::json!({ "message": "GPS data not found" }))
     }
 }
-

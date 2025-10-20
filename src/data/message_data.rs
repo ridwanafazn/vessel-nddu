@@ -3,7 +3,7 @@ use crate::data::{gps_data::GpsData, gyro_data::GyroData};
 
 // pub struct MessageData {
 //     pub message: String,
-//     pub data: GpsData::GyroData, // INI PENYEBAB ERROR
+//     pub data: GpsData::GyroData,
 // }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -110,4 +110,3 @@ pub fn run_gps_tasks(state: AppState) {
         }
     });
 }
-

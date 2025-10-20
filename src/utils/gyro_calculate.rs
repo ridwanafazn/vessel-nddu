@@ -34,4 +34,3 @@ pub fn calculate_next_gyro_state(gyro_data: &mut GyroData, dt_seconds: f64) {
     
     gyro_data.last_update = Utc::now();
 }
-

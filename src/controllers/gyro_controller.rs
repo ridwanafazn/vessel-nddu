@@ -30,7 +30,7 @@ pub async fn update_config(state: web::Data<AppState>, body: web::Json<UpdateGyr
         
         let test_result = tokio::task::spawn_blocking(move || {
             MqttManager::test_connection(&ip, port)
-        }).await.expect("Task spawn_blocking panik, ini seharusnya tidak terjadi.");
+        }).await.expect("Task spawn_blocking panic.");
 
         if let Err(e) = test_result {
             log::warn!("[API] Connection test failed: {}", e);
