@@ -3,7 +3,7 @@ use crate::data::gyro_data::{CreateGyroPayload, GyroConfig, GyroData, UpdateGyro
 use crate::{AppState, ConfigUpdate};
 use chrono::Utc;
 use crate::utils::mqtt_manager::MqttManager;
-
+use serde_json::Value;
 // === CONFIG HANDLERS ===
 
 /// [GET] /api/gyro/config
@@ -75,7 +75,7 @@ pub async fn delete_config(state: web::Data<AppState>) -> impl Responder {
 // === SENSOR DATA HANDLERS ===
 
 /// [POST] /api/gyro
-pub async fn create_gyro(state: web::Data<AppState>, body: web::Json<CreateGyroPayload>) -> impl Responder {
+pub async fn create_gyro(state: web::Data<AppState>, body: web::Json<Value>) -> impl Responder {
     {
         let config = state.gyro_config.read().await;
         if config.ip.is_none() || config.port.is_none() {
@@ -89,7 +89,45 @@ pub async fn create_gyro(state: web::Data<AppState>, body: web::Json<CreateGyroP
         return HttpResponse::Conflict().json(serde_json::json!({"message": "Gyro data already exists."}));
     }
 
-    let req = body.into_inner();
+    let v = body.into_inner();
+    let required_fields = ["yaw", "pitch", "roll", "yaw_rate", "is_running"];
+    let mut missing_fields = Vec::new();
+
+    if let Some(obj) = v.as_object() {
+        for field in &required_fields {
+            if !obj.contains_key(*field) {
+                missing_fields.push(*field);
+            }
+        }
+    } else {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "message": "Invalid input data. Expected a JSON object."
+        }));
+    }
+
+    if !missing_fields.is_empty() {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "message": format!("Invalid input data. Need field(s): {}", missing_fields.join(", "))
+        }));
+    }
+    
+    let req: CreateGyroPayload = match serde_json::from_value(v) {
+        Ok(payload) => payload,
+        Err(e) => {
+            let message = if e.is_data() {
+                let error_string = e.to_string();
+                let clean_error = error_string.split(" at line").next().unwrap_or(&error_string);
+                format!("Invalid input data: {}", clean_error)
+            } else if e.is_syntax() {
+                "Invalid JSON syntax.".to_string()
+            } else {
+                "Bad request.".to_string()
+            };
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "message": message
+            }));
+        }
+    };
 
     if !(-90.0..=90.0).contains(&req.pitch) { return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid pitch. Must be between -90 and 90."})); }
     if !(-90.0..=90.0).contains(&req.roll) { return HttpResponse::BadRequest().json(serde_json::json!({"message": "Invalid roll. Must be between -90 and 90."})); }
