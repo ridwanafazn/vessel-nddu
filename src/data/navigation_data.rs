@@ -8,13 +8,14 @@ pub type SharedSpeedState = Arc<RwLock<Option<SpeedState>>>;
 pub type SharedDepthState = Arc<RwLock<Option<DepthState>>>;
 
 // Speed State
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct SpeedState {
     pub speed_through_water: f64, // knots
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     #[allow(dead_code)]
     pub calculation_rate_ms: u64,
 }
@@ -34,7 +35,7 @@ impl SpeedState {
 }
 
 // Depth State
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct DepthState {
     pub ocean_water_depth: f64,  // meters from surface (Current Depth)
     pub constant_clearance: f64,  // meters (Set Constant Clearance)
@@ -43,6 +44,7 @@ pub struct DepthState {
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     #[allow(dead_code)]
     pub calculation_rate_ms: u64,
 }
@@ -87,7 +89,7 @@ impl DepthState {
 }
 
 // Shared Navigation Config (for both Speed & Depth)
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct NavigationConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -114,27 +116,27 @@ impl Default for NavigationConfig {
 }
 
 // Speed Request Types
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, utoipa::ToSchema)]
 pub struct CreateSpeedRequest {
     pub speed_through_water: f64,
     pub is_running: bool,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateSpeedRequest {
     pub speed_through_water: Option<f64>,
     pub is_running: Option<bool>,
 }
 
 // Depth Request Types
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, utoipa::ToSchema)]
 pub struct CreateDepthRequest {
     pub ocean_water_depth: f64,
     pub constant_clearance: f64,
     pub is_running: bool,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateDepthRequest {
     pub ocean_water_depth: Option<f64>,
     pub constant_clearance: Option<f64>,
@@ -142,7 +144,7 @@ pub struct UpdateDepthRequest {
 }
 
 // Shared Config Request
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateNavigationConfigRequest {
     pub ip: Option<String>,
     pub port: Option<u16>,

@@ -77,27 +77,32 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 
 ## Fase 1 — Kontrak & Tooling
 
+> **Status: ✅ SELESAI (2026-10-31)** — Swagger, README, Docker, dead code dibersihkan.
+
 ### D-01 · Swagger
-- [ ] Tambah `utoipa`, `utoipa-swagger-ui` ke `Cargo.toml`
-- [ ] `#[derive(ToSchema)]` semua DTO
-- [ ] `#[utoipa::path]` semua handler
-- [ ] `docs/openapi.rs` dengan `#[derive(OpenApi)]`
-- [ ] Mount `/swagger-ui/` + `/api-docs/openapi.json`
-- [ ] Uji: semua endpoint tampil, contoh payload benar
-- **Acceptance:** Swagger UI bisa execute request
+- [x] Tambah `utoipa` + `utoipa-swagger-ui`
+- [x] `#[derive(ToSchema)]` semua DTO
+- [x] `#[utoipa::path]` semua handler (58 operasi)
+- [x] `docs/openapi.rs` dengan `#[derive(OpenApi)]`
+- [x] Mount `/swagger-ui/` + `/api-docs/openapi.json`
+- [x] Uji: **17 path, 67 schema**, UI 200
+- **Acceptance:** ✅ Swagger UI bisa execute request
 
 ### D-02 · Repo hygiene
-- [ ] `git init` + commit awal
-- [ ] `README.md` root (cara run <5 menit)
-- [ ] Hapus `src/config/websocket.rs`
-- [ ] Putuskan nasib `nmea.c` (aktifkan atau hapus)
-- [ ] Hapus dependency mati
-- [ ] `.env.example`
+- [x] `git init` + commit awal
+- [x] `README.md` root (cara run <5 menit)
+- [x] Hapus `src/config/websocket.rs`
+- [x] Hapus `nmea.c`/`nmea.h` (tidak dikompilasi, header hilang)
+- [x] Hapus dependency mati: `reqwest`, `bincode`, `lazy_static`, `wmm`
+- [x] `.env.example`
+- [x] Lisensi MIT
 
-### D-03 · Docker (opsional)
-- [ ] `Dockerfile` multi-stage
-- [ ] `docker-compose.yml` (app + mosquitto)
-- [ ] Uji `docker compose up`
+### D-03 · Docker
+- [x] `Dockerfile` multi-stage
+- [x] `docker-compose.yml` (app + mosquitto)
+- [x] `deploy/mosquitto.conf`
+- [x] `.dockerignore`
+- [ ] Uji `docker compose up` (Docker Desktop dimatikan — opsional)
 
 ---
 
@@ -198,4 +203,8 @@ Sebuah task dianggap selesai jika:
 | 2026-10-31 | P0-01 MQTT fail-safe | ✅ | WS 15 pesan saat broker mati |
 | 2026-10-31 | P0-02 MQTT global runtime | ✅ | 1884 → 1883, `connected=true` |
 | 2026-10-31 | P1-14 GPS JSON | ✅ | `?format=json` + default NMEA |
-| — | Fase 1 (Swagger) | ⏳ | berikutnya |
+| 2026-10-31 | Fase 1 Swagger | ✅ | 17 path, 67 schema, `/swagger-ui/` 200 |
+| 2026-10-31 | README + Docker | ✅ | `README.md`, `Dockerfile`, `docker-compose.yml` |
+| 2026-10-31 | Hygiene | ✅ | `nmea.c/h`, `config/websocket.rs`, 4 dep dihapus |
+| — | Fase 2 (ApiError/AppState/CI) | ⏳ | berikutnya |
+| — | Deploy HF Spaces | ⏳ | setelah Fase 2 |

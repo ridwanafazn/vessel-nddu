@@ -1,14 +1,15 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::data::weather_data::{SharedWeatherConfig, SharedHumidityState, HumidityState};
+use crate::docs::responses::{HumidityResponse, MessageResponse};
 use chrono::Utc;
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreateHumidityRequest {
     pub air_humidity: f64,
     pub is_running: bool,
 }
 
-#[derive(serde::Deserialize, Default)]
+#[derive(serde::Deserialize, Default, utoipa::ToSchema)]
 pub struct UpdateHumidityRequest {
     pub air_humidity: Option<f64>,
     pub is_running: Option<bool>,
@@ -16,6 +17,16 @@ pub struct UpdateHumidityRequest {
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+#[utoipa::path(
+    post,
+    path = "/api/humidity",
+    tag = "Humidity",
+    request_body = CreateHumidityRequest,
+    responses(
+        (status = 201, description = "Sensor kelembapan dibuat", body = HumidityResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_humidity(
     data_state: web::Data<SharedHumidityState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -46,6 +57,15 @@ pub async fn create_humidity(
     HttpResponse::Created().json(serde_json::json!({"message":"Humidity created successfully.", "data": new_state }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/humidity",
+    tag = "Humidity",
+    responses(
+        (status = 200, description = "State kelembapan", body = HumidityResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_humidity(state: web::Data<SharedHumidityState>) -> impl Responder {
     let guard = state.read().unwrap();
     match guard.as_ref() {
@@ -54,6 +74,17 @@ pub async fn get_humidity(state: web::Data<SharedHumidityState>) -> impl Respond
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/humidity",
+    tag = "Humidity",
+    request_body = UpdateHumidityRequest,
+    responses(
+        (status = 200, description = "Kelembapan diperbarui", body = HumidityResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_humidity(
     data_state: web::Data<SharedHumidityState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -79,6 +110,15 @@ pub async fn update_humidity(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/humidity",
+    tag = "Humidity",
+    responses(
+        (status = 200, description = "Data dihapus", body = MessageResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_humidity(state: web::Data<SharedHumidityState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

@@ -204,13 +204,16 @@ curl -X POST http://127.0.0.1:8080/api/gps \
 curl http://127.0.0.1:8080/api/gps
 ```
 
-## 6. Rencana Swagger (Fase 1)
+## 6. Swagger / OpenAPI — ✅ Fase 1
 
-- Library: `utoipa` 5.x + `utoipa-swagger-ui` 9.x (fitur `actix-web`).
-- Endpoint: `GET /api-docs/openapi.json`, `GET /swagger-ui/`.
-- Semua DTO wajib `#[derive(ToSchema)]`.
-- Semua handler wajib `#[utoipa::path(...)]` dengan response 200/400/404/409.
+- Library: `utoipa` 6.x + `utoipa-swagger-ui` 10.x (fitur `actix-web`).
+- UI interaktif: **`GET /swagger-ui/`**
+- Spesifikasi JSON: **`GET /api-docs/openapi.json`**
+- Cakupan: **17 path, 67 schema** (semua handler).
+- Semua DTO memakai `#[derive(ToSchema)]`; semua handler memakai `#[utoipa::path]`.
 - Dokumentasi WS/MQTT **tidak** masuk OpenAPI → ada di `03-realtime-contract.md`.
+- `POST` pada `/api/{sensor}/config` adalah alias `PATCH` (didokumentasikan di
+  deskripsi operation).
 
 ## 7. Aturan perubahan kontrak
 

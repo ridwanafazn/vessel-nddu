@@ -3,10 +3,21 @@ use crate::data::navigation_data::{
     SharedNavigationConfig, SharedSpeedState, SpeedState,
     CreateSpeedRequest, UpdateSpeedRequest,
 };
+use crate::docs::responses::{MessageResponse, SpeedResponse};
 use chrono::Utc;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+#[utoipa::path(
+    post,
+    path = "/api/speed",
+    tag = "Speed",
+    request_body = CreateSpeedRequest,
+    responses(
+        (status = 201, description = "Speed log dibuat", body = SpeedResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_speed(
     data_state: web::Data<SharedSpeedState>,
     config_state: web::Data<SharedNavigationConfig>,
@@ -44,6 +55,15 @@ pub async fn create_speed(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/speed",
+    tag = "Speed",
+    responses(
+        (status = 200, description = "State speed log", body = SpeedResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_speed(state: web::Data<SharedSpeedState>) -> impl Responder {
     let guard = state.read().unwrap();
     match guard.as_ref() {
@@ -57,6 +77,17 @@ pub async fn get_speed(state: web::Data<SharedSpeedState>) -> impl Responder {
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/speed",
+    tag = "Speed",
+    request_body = UpdateSpeedRequest,
+    responses(
+        (status = 200, description = "Speed diperbarui", body = SpeedResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_speed(
     data_state: web::Data<SharedSpeedState>,
     config_state: web::Data<SharedNavigationConfig>,
@@ -94,6 +125,15 @@ pub async fn update_speed(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/speed",
+    tag = "Speed",
+    responses(
+        (status = 200, description = "Data dihapus", body = MessageResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_speed(state: web::Data<SharedSpeedState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

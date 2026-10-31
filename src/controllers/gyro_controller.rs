@@ -1,5 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx;
+use crate::docs::responses::{GyroConfigResponse, GyroResponse, MessageResponse};
 use crate::data::gyro_data::{
     CreateGyroRequest, GyroConfig, GyroState, SharedGyroConfig, SharedGyroState,
     UpdateGyroConfigRequest, UpdateGyroRequest,
@@ -10,6 +11,12 @@ use chrono::Utc;
 // === CONFIG HANDLERS ===
 
 #[allow(clippy::let_and_return)]
+#[utoipa::path(
+    get,
+    path = "/api/gyro/config",
+    tag = "Gyro",
+    responses((status = 200, description = "Konfigurasi gyro", body = GyroConfigResponse))
+)]
 pub async fn get_config(config: web::Data<SharedGyroConfig>) -> impl Responder {
     let guard = config.read().unwrap();
     HttpResponse::Ok().json(serde_json::json!({
@@ -18,6 +25,14 @@ pub async fn get_config(config: web::Data<SharedGyroConfig>) -> impl Responder {
     }))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/gyro/config",
+    tag = "Gyro",
+    description = "Perbarui konfigurasi gyro. POST juga diterima sebagai alias.",
+    request_body = UpdateGyroConfigRequest,
+    responses((status = 200, description = "Config diperbarui", body = GyroConfigResponse))
+)]
 pub async fn post_config(
     config: web::Data<SharedGyroConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -35,7 +50,7 @@ pub async fn post_config(
     guard.enabled_sentences = patch.enabled_sentences.or_else(|| guard.enabled_sentences.clone());
     guard.tcp_enabled = patch.tcp_enabled.or(guard.tcp_enabled);
     
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Gyro Config updated successfully.",
@@ -43,6 +58,12 @@ pub async fn post_config(
     }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/gyro/config",
+    tag = "Gyro",
+    responses((status = 200, description = "Config di-reset", body = MessageResponse))
+)]
 pub async fn delete_config(
     config: web::Data<SharedGyroConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -50,7 +71,7 @@ pub async fn delete_config(
     let mut guard = config.write().unwrap();
     *guard = GyroConfig::default();
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Gyro Config deleted successfully."
@@ -59,6 +80,16 @@ pub async fn delete_config(
 
 // === SENSOR STATE HANDLERS ===
 
+#[utoipa::path(
+    post,
+    path = "/api/gyro",
+    tag = "Gyro",
+    request_body = CreateGyroRequest,
+    responses(
+        (status = 201, description = "Gyro dibuat", body = GyroResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_gyro(
     data_state: web::Data<SharedGyroState>,
     config_state: web::Data<SharedGyroConfig>,
@@ -96,6 +127,15 @@ pub async fn create_gyro(
     }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/gyro",
+    tag = "Gyro",
+    responses(
+        (status = 200, description = "State gyro", body = GyroResponse),
+        (status = 404, description = "Gyro belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_gyro(state: web::Data<SharedGyroState>) -> impl Responder {
     let guard = state.read().unwrap();
     match guard.as_ref() {
@@ -107,6 +147,17 @@ pub async fn get_gyro(state: web::Data<SharedGyroState>) -> impl Responder {
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/gyro",
+    tag = "Gyro",
+    request_body = UpdateGyroRequest,
+    responses(
+        (status = 200, description = "Gyro diperbarui", body = GyroResponse),
+        (status = 404, description = "Gyro belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_gyro(
     data_state: web::Data<SharedGyroState>,
     config_state: web::Data<SharedGyroConfig>,
@@ -141,6 +192,15 @@ pub async fn update_gyro(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/gyro",
+    tag = "Gyro",
+    responses(
+        (status = 200, description = "Gyro dihapus", body = MessageResponse),
+        (status = 404, description = "Gyro belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_gyro(state: web::Data<SharedGyroState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

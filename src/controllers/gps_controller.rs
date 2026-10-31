@@ -1,5 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx; // Import tipe pengirim perintah
+use crate::docs::responses::{GpsConfigResponse, GpsResponse, MessageResponse};
 use crate::data::gps_data::{
     CreateGpsRequest, GpsConfig, GpsState, SharedGpsConfig, SharedGpsState, UpdateGpsConfigRequest,
     UpdateGpsRequest,
@@ -11,6 +12,12 @@ use chrono::Utc;
 // === CONFIG HANDLERS ===
 
 /// [GET] /api/gps/config - Mengambil konfigurasi GPS saat ini.
+#[utoipa::path(
+    get,
+    path = "/api/gps/config",
+    tag = "GPS",
+    responses((status = 200, description = "Konfigurasi GPS", body = GpsConfigResponse))
+)]
 pub async fn get_config(config: web::Data<SharedGpsConfig>) -> impl Responder {
     let guard = config.read().unwrap();
     HttpResponse::Ok().json(serde_json::json!({
@@ -20,6 +27,14 @@ pub async fn get_config(config: web::Data<SharedGpsConfig>) -> impl Responder {
 }
 
 /// [POST] /api/gps/config - Mengisi atau menimpa semua nilai config.
+#[utoipa::path(
+    patch,
+    path = "/api/gps/config",
+    tag = "GPS",
+    description = "Perbarui konfigurasi GPS. POST juga diterima sebagai alias.",
+    request_body = UpdateGpsConfigRequest,
+    responses((status = 200, description = "Config diperbarui", body = GpsConfigResponse))
+)]
 pub async fn post_config(
     config: web::Data<SharedGpsConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -39,7 +54,7 @@ pub async fn post_config(
     guard.tcp_enabled = patch.tcp_enabled.or(guard.tcp_enabled);
 
     // Kirim perintah untuk menyambung ulang
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "GPS Config updated successfully.",
@@ -48,6 +63,12 @@ pub async fn post_config(
 }
 
 /// [DELETE] /api/gps/config - Mengosongkan (reset) semua nilai config menjadi null.
+#[utoipa::path(
+    delete,
+    path = "/api/gps/config",
+    tag = "GPS",
+    responses((status = 200, description = "Config di-reset", body = MessageResponse))
+)]
 pub async fn delete_config(
     config: web::Data<SharedGpsConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -56,7 +77,7 @@ pub async fn delete_config(
     *guard = GpsConfig::default(); // Ganti dengan struct default yang semua fieldnya None
 
     // Kirim perintah untuk menyambung ulang (efektifnya akan memutuskan koneksi)
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "GPS Config deleted successfully."
@@ -66,6 +87,16 @@ pub async fn delete_config(
 // === SENSOR STATE HANDLERS ===
 
 /// [POST] /api/gps - Membuat instance simulasi GPS.
+#[utoipa::path(
+    post,
+    path = "/api/gps",
+    tag = "GPS",
+    request_body = CreateGpsRequest,
+    responses(
+        (status = 201, description = "GPS dibuat", body = GpsResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_gps(
     data_state: web::Data<SharedGpsState>,
     config_state: web::Data<SharedGpsConfig>,
@@ -110,11 +141,22 @@ pub async fn create_gps(
 }
 
 /// [GET] /api/gps - Default: NMEA GPRMC. Dengan `?format=json`: JSON untuk FE.
-#[derive(serde::Deserialize, Debug, Default)]
+#[derive(serde::Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct GetGpsQuery {
     pub format: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/gps",
+    tag = "GPS",
+    description = "Default: NMEA GPRMC (text/plain). Gunakan ?format=json untuk JSON.",
+    params(("format" = Option<String>, Query, description = "Isi 'json' untuk response JSON")),
+    responses(
+        (status = 200, description = "NMEA GPRMC atau JSON GpsResponse", body = GpsResponse),
+        (status = 404, description = "GPS belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_gps(
     state: web::Data<SharedGpsState>,
     query: web::Query<GetGpsQuery>,
@@ -154,6 +196,17 @@ pub async fn get_gps(
 }
 
 /// [PATCH] /api/gps - Memperbarui sebagian state simulasi GPS.
+#[utoipa::path(
+    patch,
+    path = "/api/gps",
+    tag = "GPS",
+    request_body = UpdateGpsRequest,
+    responses(
+        (status = 200, description = "GPS diperbarui", body = GpsResponse),
+        (status = 404, description = "GPS belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_gps(
     data_state: web::Data<SharedGpsState>,
     config_state: web::Data<SharedGpsConfig>,
@@ -190,6 +243,15 @@ pub async fn update_gps(
 }
 
 /// [DELETE] /api/gps - Menghapus instance simulasi GPS.
+#[utoipa::path(
+    delete,
+    path = "/api/gps",
+    tag = "GPS",
+    responses(
+        (status = 200, description = "GPS dihapus", body = MessageResponse),
+        (status = 404, description = "GPS belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_gps(state: web::Data<SharedGpsState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

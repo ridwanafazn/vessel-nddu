@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 pub const ADMIN_USERNAME: &str = "admin";
 pub const ADMIN_PASSWORD: &str = "admin";
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct LoginResponse {
     pub success: bool,
     pub message: String,

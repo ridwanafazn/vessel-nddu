@@ -1,0 +1,25 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./deploy/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  vessel:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "9001:9001"
+    environment:
+      HTTP_ADDR: 0.0.0.0:8080
+      WS_ADDR: 0.0.0.0:8081
+      TCP_ADDR: 0.0.0.0:9001
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      RUST_LOG: info

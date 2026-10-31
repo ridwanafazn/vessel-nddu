@@ -5,23 +5,24 @@ use crate::data::compass_data::{
     COMPASS_DEVIATION, COMPASS_VARIATION,
 };
 use crate::utils::mqtt_manager::MqttCommand;
+use crate::docs::responses::{CompassConfigResponse, CompassResponse, MessageResponse};
 use chrono::Local;
 use serde::Deserialize;
 
 // === REQUEST/RESPONSE MODELS ===
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct CreateCompassRequest {
     pub heading: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateCompassRequest {
     pub heading: Option<f64>,
     pub is_running: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct UpdateCompassConfigRequest {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -33,6 +34,12 @@ pub struct UpdateCompassConfigRequest {
 
 // === CONFIG HANDLERS ===
 
+#[utoipa::path(
+    get,
+    path = "/api/compass/config",
+    tag = "Compass",
+    responses((status = 200, description = "Konfigurasi kompas (null jika belum dibuat)", body = CompassConfigResponse))
+)]
 pub async fn get_config(config: web::Data<SharedCompassConfig>) -> impl Responder {
     let guard = config.read().unwrap();
     HttpResponse::Ok().json(serde_json::json!({
@@ -41,6 +48,14 @@ pub async fn get_config(config: web::Data<SharedCompassConfig>) -> impl Responde
     }))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/compass/config",
+    tag = "Compass",
+    description = "Perbarui konfigurasi kompas. POST juga diterima sebagai alias.",
+    request_body = UpdateCompassConfigRequest,
+    responses((status = 200, description = "Config diperbarui", body = CompassConfigResponse))
+)]
 pub async fn post_config(
     config: web::Data<SharedCompassConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -69,7 +84,7 @@ pub async fn post_config(
     cfg.update_rate = patch.update_rate.or(cfg.update_rate);
     cfg.topics = patch.topics.or_else(|| cfg.topics.clone());
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Compass Config updated successfully.",
@@ -77,6 +92,12 @@ pub async fn post_config(
     }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/compass/config",
+    tag = "Compass",
+    responses((status = 200, description = "Config dihapus", body = MessageResponse))
+)]
 pub async fn delete_config(
     config: web::Data<SharedCompassConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -84,7 +105,7 @@ pub async fn delete_config(
     let mut guard = config.write().unwrap();
     *guard = None;
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Compass Config deleted successfully."
@@ -93,6 +114,15 @@ pub async fn delete_config(
 
 // === STATE HANDLERS ===
 
+#[utoipa::path(
+    get,
+    path = "/api/compass",
+    tag = "Compass",
+    responses(
+        (status = 200, description = "State kompas", body = CompassResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_compass(state: web::Data<SharedCompassState>) -> impl Responder {
     let guard = state.read().unwrap();
     
@@ -113,6 +143,16 @@ pub async fn get_compass(state: web::Data<SharedCompassState>) -> impl Responder
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/compass",
+    tag = "Compass",
+    request_body = CreateCompassRequest,
+    responses(
+        (status = 201, description = "Kompas dibuat", body = CompassResponse),
+        (status = 409, description = "Instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn post_compass(
     _config: web::Data<SharedCompassConfig>,
     state: web::Data<SharedCompassState>,
@@ -148,6 +188,17 @@ pub async fn post_compass(
     }))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/compass",
+    tag = "Compass",
+    request_body = UpdateCompassRequest,
+    responses(
+        (status = 200, description = "Kompas diperbarui", body = CompassResponse),
+        (status = 400, description = "Config kompas belum lengkap", body = MessageResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn patch_compass(
     config: web::Data<SharedCompassConfig>,
     state: web::Data<SharedCompassState>,
@@ -202,6 +253,15 @@ pub async fn patch_compass(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/compass",
+    tag = "Compass",
+    responses(
+        (status = 200, description = "Kompas dihapus", body = MessageResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_compass(state: web::Data<SharedCompassState>) -> impl Responder {
     let mut guard = state.write().unwrap();
 

@@ -38,6 +38,9 @@ Fase 5  Operasional        Auth, persistence, metrics, deploy
 
 ## Fase 1 — Kontrak & Tooling
 
+> **Status: ✅ SELESAI (2026-10-31)** — Swagger UI + JSON, README, Dockerfile,
+> dependency mati dihapus.
+
 | Deliverable | Kriteria selesai |
 |---|---|
 | Swagger UI + JSON (`utoipa`) | `/swagger-ui/` dan `/api-docs/openapi.json` hidup |

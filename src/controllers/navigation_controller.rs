@@ -1,5 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx;
+use crate::docs::responses::{MessageResponse, NavigationConfigResponse};
 use crate::data::navigation_data::{
     NavigationConfig, SharedNavigationConfig, UpdateNavigationConfigRequest,
 };
@@ -7,6 +8,12 @@ use crate::utils::mqtt_manager::MqttCommand;
 
 // === CONFIG HANDLERS ===
 
+#[utoipa::path(
+    get,
+    path = "/api/navigation/config",
+    tag = "Navigation",
+    responses((status = 200, description = "Konfigurasi navigasi (speed & depth)", body = NavigationConfigResponse))
+)]
 pub async fn get_config(config: web::Data<SharedNavigationConfig>) -> impl Responder {
     let guard = config.read().unwrap();
     HttpResponse::Ok().json(serde_json::json!({
@@ -15,6 +22,14 @@ pub async fn get_config(config: web::Data<SharedNavigationConfig>) -> impl Respo
     }))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/navigation/config",
+    tag = "Navigation",
+    description = "Perbarui konfigurasi navigasi. POST juga diterima sebagai alias.",
+    request_body = UpdateNavigationConfigRequest,
+    responses((status = 200, description = "Config diperbarui", body = NavigationConfigResponse))
+)]
 pub async fn post_config(
     config: web::Data<SharedNavigationConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -32,7 +47,7 @@ pub async fn post_config(
     // Update enabled_sentences if present in request
     guard.enabled_sentences = patch.enabled_sentences.or_else(|| guard.enabled_sentences.clone());
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Navigation Config updated successfully.",
@@ -40,6 +55,12 @@ pub async fn post_config(
     }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/navigation/config",
+    tag = "Navigation",
+    responses((status = 200, description = "Config di-reset", body = MessageResponse))
+)]
 pub async fn delete_config(
     config: web::Data<SharedNavigationConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -47,7 +68,7 @@ pub async fn delete_config(
     let mut guard = config.write().unwrap();
     *guard = NavigationConfig::default();
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Navigation Config deleted successfully."

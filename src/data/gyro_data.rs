@@ -59,7 +59,7 @@ pub type SharedGyroState = Arc<RwLock<Option<GyroState>>>;
 pub type SharedGyroConfig = Arc<RwLock<GyroConfig>>;
 
 // DIUBAH: Struct State yang ramping, tanpa config.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct GyroState {
     pub yaw: f64,
     pub pitch: f64,
@@ -68,11 +68,12 @@ pub struct GyroState {
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     #[serde(skip)]
+    #[schema(ignore)]
     pub calculation_rate_ms: u64,
 }
 
 // DIUBAH: Struct Config yang independen dengan field Option<T>.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct GyroConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -102,7 +103,7 @@ impl Default for GyroConfig {
 }
 
 // Struct Request API.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, utoipa::ToSchema)]
 pub struct CreateGyroRequest {
     pub yaw: f64,
     pub pitch: f64,
@@ -111,7 +112,7 @@ pub struct CreateGyroRequest {
     pub is_running: bool,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateGyroRequest {
     pub yaw: Option<f64>,
     pub pitch: Option<f64>,
@@ -120,7 +121,7 @@ pub struct UpdateGyroRequest {
     pub is_running: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateGyroConfigRequest {
     pub ip: Option<String>,
     pub port: Option<u16>,

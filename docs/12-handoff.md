@@ -17,10 +17,10 @@ dibuka di root `C:\Users\Ridwan\Git-v2` agar bisa melihat dua repo sekaligus).
 | Port 8080 | ✅ bebas (`smile-fest-api` dimatikan) |
 | Git repo | ✅ `git init` + baseline commit |
 | **Fase 0 (P0-01..04, P1-01/02/13/14)** | ✅ **selesai & terverifikasi** |
+| **Fase 1 (Swagger, README, Docker, hygiene)** | ✅ **selesai & terverifikasi** |
 | Unit test | ✅ 15 test lulus |
 | Lisensi | ✅ MIT |
-| Swagger | ❌ belum (Fase 1) |
-| Deploy HF Spaces | ❌ belum (Fase 5 / setelah Swagger) |
+| Deploy HF Spaces | ❌ belum (berikutnya) |
 
 ---
 
@@ -119,14 +119,18 @@ cargo build
 | — | Auth JWT: kapan? | Fase 5 (sebelum deploy publik) |
 | — | Lisensi/kepemilikan kode vs PT LEN | Konfirmasi ke pembimbing |
 
-## 6.1 Next: Fase 1
+## 6.1 Next: Fase 2
 
-1. `utoipa` + `utoipa-swagger-ui` → `/swagger-ui/` + `/api-docs/openapi.json`
-2. `ToSchema` untuk semua DTO, `#[utoipa::path]` untuk semua handler
-3. `README.md` root (cara run < 5 menit)
-4. Hapus dead code (`src/config/websocket.rs`, `nmea.c` atau aktifkan)
-5. Dockerfile multi-stage + `docker-compose.yml` (opsional)
-6. Update `02-api-contract.md` dengan link Swagger
+1. `ApiError` + `ResponseError` (hilangkan `unwrap()` di handler)
+2. `AppState` tunggal (kurangi 25 `web::Data`)
+3. Graceful shutdown (`CancellationToken`)
+4. Test integrasi REST (`actix_web::test`)
+5. CI GitHub Actions: fmt, clippy `-D warnings`, test, build
+6. Release profile (`lto`, `strip`)
+7. Deploy HF Spaces (butuh Docker + port 7860 + proxy WS)
+
+> Untuk portofolio/loker: **Fase 2 + deploy** adalah pembeda terbesar.
+> Fase 3–5 bisa berjalan setelah lamaran dikirim.
 
 ---
 
@@ -160,17 +164,21 @@ Konteks penting:
   Syarat utama: Swagger/OpenAPI harus ada.
 - Swagger memakai utoipa + utoipa-swagger-ui (UI + JSON).
 
-Fase 0 SUDAH SELESAI (2026-10-31): 4 bug P0 + P1-01/02/13/14, 15 unit test,
-0 warning, terverifikasi end-to-end. Lisensi MIT. MQTT global.
+Fase 0 dan Fase 1 SUDAH SELESAI (2026-10-31):
+- 4 bug P0 + P1-01/02/13/14
+- Swagger UI + OpenAPI JSON (17 path, 67 schema)
+- README root, Dockerfile, docker-compose
+- dead code & dependency mati dihapus
+- 15 unit test, 0 warning, lisensi MIT, MQTT global
 
-Tugas saat ini: Fase 1 (lihat docs/06-tasks.md), urutan:
-1. Tambah utoipa + utoipa-swagger-ui
-2. #[derive(ToSchema)] untuk semua DTO
-3. #[utoipa::path] untuk semua handler
-4. Mount /swagger-ui/ dan /api-docs/openapi.json
-5. README.md root (cara run < 5 menit)
-6. Hapus dead code (src/config/websocket.rs, nmea.c) atau aktifkan
-7. Dockerfile multi-stage (opsional, untuk HF Spaces nanti)
+Tugas saat ini: Fase 2 (lihat docs/06-tasks.md), urutan:
+1. ApiError + ResponseError
+2. AppState tunggal
+3. Graceful shutdown
+4. Test integrasi REST
+5. CI GitHub Actions (fmt, clippy -D warnings, test, build)
+6. Release profile
+7. Deploy HF Spaces
 
 Aturan:
 - Jangan mulai kode sebelum saya bilang "gas".

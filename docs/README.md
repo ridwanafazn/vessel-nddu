@@ -52,8 +52,10 @@ Dokumen di folder ini adalah **sumber kebenaran** untuk pengembangan bertahap.
 | MQTT config | ✅ Global, runtime via `/api/mqtt/config` |
 | TCP client (outbound) | ✅ Berjalan, depth ikut update |
 | TCP server (9001) | ❌ Masih stub (echo) |
-| Swagger | ❌ Belum ada (Fase 1) |
+| Swagger | ✅ `/swagger-ui/` + `/api-docs/openapi.json` |
 | Test | ✅ 15 unit test |
 | Fase 0 | ✅ Selesai & terverifikasi |
+| Fase 1 | ✅ Selesai (Swagger, README, Docker) |
+| Docker | ✅ Dockerfile + compose (uji lokal opsional) |
 | Lisensi | ✅ MIT |
 | Dokumentasi | ✅ Folder ini (14 file) |

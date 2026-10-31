@@ -1,14 +1,15 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::data::weather_data::{SharedWeatherConfig, SharedPressureState, PressureState};
+use crate::docs::responses::{MessageResponse, PressureResponse};
 use chrono::Utc;
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreatePressureRequest {
     pub air_pressure: f64,
     pub is_running: bool,
 }
 
-#[derive(serde::Deserialize, Default)]
+#[derive(serde::Deserialize, Default, utoipa::ToSchema)]
 pub struct UpdatePressureRequest {
     pub air_pressure: Option<f64>,
     pub is_running: Option<bool>,
@@ -16,6 +17,16 @@ pub struct UpdatePressureRequest {
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+#[utoipa::path(
+    post,
+    path = "/api/pressure",
+    tag = "Pressure",
+    request_body = CreatePressureRequest,
+    responses(
+        (status = 201, description = "Sensor tekanan dibuat", body = PressureResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_pressure(
     data_state: web::Data<SharedPressureState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -46,6 +57,15 @@ pub async fn create_pressure(
     HttpResponse::Created().json(serde_json::json!({"message":"Pressure created successfully.", "data": new_state }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/pressure",
+    tag = "Pressure",
+    responses(
+        (status = 200, description = "State tekanan", body = PressureResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_pressure(state: web::Data<SharedPressureState>) -> impl Responder {
     let guard = state.read().unwrap();
     match guard.as_ref() {
@@ -54,6 +74,17 @@ pub async fn get_pressure(state: web::Data<SharedPressureState>) -> impl Respond
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/pressure",
+    tag = "Pressure",
+    request_body = UpdatePressureRequest,
+    responses(
+        (status = 200, description = "Tekanan diperbarui", body = PressureResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_pressure(
     data_state: web::Data<SharedPressureState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -79,6 +110,15 @@ pub async fn update_pressure(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/pressure",
+    tag = "Pressure",
+    responses(
+        (status = 200, description = "Data dihapus", body = MessageResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_pressure(state: web::Data<SharedPressureState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

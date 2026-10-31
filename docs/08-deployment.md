@@ -104,18 +104,23 @@ Hugging Face Space (origin Rust)
 
 ## 5. Checklist deploy (Opsi A)
 
-- [ ] `Dockerfile` multi-stage (`rust:1.99` → `debian:bookworm-slim`)
-- [ ] Bind `0.0.0.0:7860`
-- [ ] `MQTT_URL` dari env
-- [ ] `RUST_LOG=info`
-- [ ] Swagger UI aktif
-- [ ] Healthcheck `/health`
-- [ ] `.dockerignore` (`target/`)
-- [ ] Ukuran image < 200 MB
-- [ ] Uji `docker run -p 7860:7860`
+- [x] `Dockerfile` multi-stage (`rust:1-slim` → `debian:bookworm-slim`)
+- [x] `docker-compose.yml` (app + mosquitto)
+- [x] `deploy/mosquitto.conf`
+- [ ] Bind `0.0.0.0:7860` untuk HF Spaces (env override)
+- [ ] `MQTT_URL`/`MQTT_HOST` dari env
+- [x] `RUST_LOG=info`
+- [x] Swagger UI aktif
+- [ ] Healthcheck `/health` (Fase 2)
+- [x] `.dockerignore` (`target/`)
+- [ ] Uji `docker compose up` (Docker Desktop dimatikan)
 - [ ] Push ke HF Spaces (Docker SDK)
-- [ ] Set secrets (MQTT URL/credentials)
+- [ ] Set secrets (MQTT host/credentials)
 - [ ] Uji dari luar: REST, WS, Swagger
+
+> Catatan HF Spaces: platform hanya mengekspos **satu port HTTP (7860)**.
+> REST + Swagger bisa langsung; WebSocket (8081) perlu diproksikan ke port
+> yang sama (nginx/Caddy) atau dipindah ke dalam Actix pada Fase 3.
 
 ## 6. Yang tidak akan jalan di platform gratis
 

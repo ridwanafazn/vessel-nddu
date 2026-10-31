@@ -1,14 +1,15 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::data::weather_data::{SharedWeatherConfig, SharedTemperatureState, TemperatureState};
+use crate::docs::responses::{MessageResponse, TemperatureResponse};
 use chrono::Utc;
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct CreateTemperatureRequest {
     pub air_temperature: f64,
     pub is_running: bool,
 }
 
-#[derive(serde::Deserialize, Default)]
+#[derive(serde::Deserialize, Default, utoipa::ToSchema)]
 pub struct UpdateTemperatureRequest {
     pub air_temperature: Option<f64>,
     pub is_running: Option<bool>,
@@ -16,6 +17,16 @@ pub struct UpdateTemperatureRequest {
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+#[utoipa::path(
+    post,
+    path = "/api/temperature",
+    tag = "Temperature",
+    request_body = CreateTemperatureRequest,
+    responses(
+        (status = 201, description = "Sensor suhu dibuat", body = TemperatureResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_temperature(
     data_state: web::Data<SharedTemperatureState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -47,6 +58,15 @@ pub async fn create_temperature(
     HttpResponse::Created().json(serde_json::json!({"message":"Temperature created successfully.", "data": new_state }))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/temperature",
+    tag = "Temperature",
+    responses(
+        (status = 200, description = "State suhu", body = TemperatureResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_temperature(state: web::Data<SharedTemperatureState>) -> impl Responder {
     let guard = state.read().unwrap();
     match guard.as_ref() {
@@ -55,6 +75,17 @@ pub async fn get_temperature(state: web::Data<SharedTemperatureState>) -> impl R
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/temperature",
+    tag = "Temperature",
+    request_body = UpdateTemperatureRequest,
+    responses(
+        (status = 200, description = "Suhu diperbarui", body = TemperatureResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_temperature(
     data_state: web::Data<SharedTemperatureState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -80,6 +111,15 @@ pub async fn update_temperature(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/temperature",
+    tag = "Temperature",
+    responses(
+        (status = 200, description = "Data dihapus", body = MessageResponse),
+        (status = 404, description = "Data belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_temperature(state: web::Data<SharedTemperatureState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

@@ -1,8 +1,16 @@
 use crate::config::MqttConfig;
+use crate::docs::responses::MqttConfigResponse;
 use crate::utils::mqtt_manager::MqttManager;
 use actix_web::{web, HttpResponse, Responder};
 use std::sync::Arc;
 
+#[utoipa::path(
+    get,
+    path = "/api/mqtt/config",
+    tag = "MQTT",
+    description = "Konfigurasi MQTT global + status koneksi & statistik publish.",
+    responses((status = 200, description = "Config MQTT", body = MqttConfigResponse))
+)]
 pub async fn get_config(manager: web::Data<Arc<MqttManager>>) -> impl Responder {
     let cfg = manager.config();
     let stats = manager.stats();
@@ -22,7 +30,7 @@ pub async fn get_config(manager: web::Data<Arc<MqttManager>>) -> impl Responder 
     }))
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct UpdateMqttConfigRequest {
     pub host: Option<String>,
     pub port: Option<u16>,
@@ -32,6 +40,14 @@ pub struct UpdateMqttConfigRequest {
     pub keep_alive_secs: Option<u64>,
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/mqtt/config",
+    tag = "MQTT",
+    description = "Ubah konfigurasi MQTT global. Supervisor akan reconnect otomatis.",
+    request_body = UpdateMqttConfigRequest,
+    responses((status = 200, description = "Config diperbarui", body = MqttConfigResponse))
+)]
 pub async fn patch_config(
     manager: web::Data<Arc<MqttManager>>,
     body: web::Json<UpdateMqttConfigRequest>,

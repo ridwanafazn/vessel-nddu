@@ -5,9 +5,12 @@ mod routes;
 mod utils;
 mod config;
 mod telemetry;
+mod docs;
 
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer, http};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 use std::sync::{Arc, RwLock};
 use crate::config::AppConfig;
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState, GpsConfig};
@@ -222,6 +225,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(depth_command_tx.clone()))
             .app_data(web::Data::new(compass_command_tx.clone()))
             .app_data(web::Data::new(mqtt_manager_for_api.clone()))
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", docs::openapi::ApiDoc::openapi()),
+            )
             .wrap(
                 Cors::default()
                     .allow_any_origin()

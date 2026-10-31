@@ -1,5 +1,6 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx;
+use crate::docs::responses::{MessageResponse, WeatherConfigResponse, WeatherResponse};
 use crate::data::weather_data::{
     CreateWeatherRequest, WeatherConfig, WeatherState, SharedWeatherConfig, SharedWeatherState,
     UpdateWeatherConfigRequest, UpdateWeatherRequest,
@@ -9,6 +10,12 @@ use chrono::Utc;
 
 // === CONFIG HANDLERS ===
 
+#[utoipa::path(
+    get,
+    path = "/api/weather/config",
+    tag = "Weather",
+    responses((status = 200, description = "Konfigurasi weather", body = WeatherConfigResponse))
+)]
 pub async fn get_config(config: web::Data<SharedWeatherConfig>) -> impl Responder {
     let guard = config.read().unwrap();
     HttpResponse::Ok().json(serde_json::json!({
@@ -17,6 +24,14 @@ pub async fn get_config(config: web::Data<SharedWeatherConfig>) -> impl Responde
     }))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/weather/config",
+    tag = "Weather",
+    description = "Perbarui konfigurasi weather. POST juga diterima sebagai alias.",
+    request_body = UpdateWeatherConfigRequest,
+    responses((status = 200, description = "Config diperbarui", body = WeatherConfigResponse))
+)]
 pub async fn post_config(
     config: web::Data<SharedWeatherConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -33,7 +48,7 @@ pub async fn post_config(
     guard.topics = patch.topics.or_else(|| guard.topics.clone());
     guard.enabled_sentences = patch.enabled_sentences.or_else(|| guard.enabled_sentences.clone());
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Weather Config updated successfully.",
@@ -41,6 +56,12 @@ pub async fn post_config(
     }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/weather/config",
+    tag = "Weather",
+    responses((status = 200, description = "Config di-reset", body = MessageResponse))
+)]
 pub async fn delete_config(
     config: web::Data<SharedWeatherConfig>,
     command_tx: web::Data<MqttCommandTx>,
@@ -48,7 +69,7 @@ pub async fn delete_config(
     let mut guard = config.write().unwrap();
     *guard = WeatherConfig::default();
 
-    let _ = command_tx.send(MqttCommand::Reconnect).await;
+    let _ = command_tx.try_send(MqttCommand::Reconnect);
 
     HttpResponse::Ok().json(serde_json::json!({
         "message": "Weather Config deleted successfully."
@@ -57,6 +78,16 @@ pub async fn delete_config(
 
 // === SENSOR STATE HANDLERS ===
 
+#[utoipa::path(
+    post,
+    path = "/api/weather",
+    tag = "Weather",
+    request_body = CreateWeatherRequest,
+    responses(
+        (status = 201, description = "Weather dibuat", body = WeatherResponse),
+        (status = 409, description = "Config belum lengkap / instance sudah ada", body = MessageResponse)
+    )
+)]
 pub async fn create_weather(
     data_state: web::Data<SharedWeatherState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -100,6 +131,15 @@ pub async fn create_weather(
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
+#[utoipa::path(
+    get,
+    path = "/api/weather",
+    tag = "Weather",
+    responses(
+        (status = 200, description = "State weather", body = WeatherResponse),
+        (status = 404, description = "Weather belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn get_weather(state: web::Data<SharedWeatherState>) -> impl Responder {
     let guard = state.read().unwrap();
     match guard.as_ref() {
@@ -113,6 +153,17 @@ pub async fn get_weather(state: web::Data<SharedWeatherState>) -> impl Responder
     }
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/weather",
+    tag = "Weather",
+    request_body = UpdateWeatherRequest,
+    responses(
+        (status = 200, description = "Weather diperbarui", body = WeatherResponse),
+        (status = 404, description = "Weather belum dibuat", body = MessageResponse),
+        (status = 409, description = "Config belum lengkap", body = MessageResponse)
+    )
+)]
 pub async fn update_weather(
     data_state: web::Data<SharedWeatherState>,
     config_state: web::Data<SharedWeatherConfig>,
@@ -164,6 +215,15 @@ pub async fn update_weather(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/weather",
+    tag = "Weather",
+    responses(
+        (status = 200, description = "Weather dihapus", body = MessageResponse),
+        (status = 404, description = "Weather belum dibuat", body = MessageResponse)
+    )
+)]
 pub async fn delete_weather(state: web::Data<SharedWeatherState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {

@@ -15,13 +15,14 @@ pub type SharedPressureState = Arc<RwLock<Option<PressureState>>>;
 pub type SharedWeatherState = Arc<RwLock<Option<WeatherState>>>;
 
 // Individual sensor states
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct TemperatureState {
     pub air_temperature: f64, // °C
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     #[allow(dead_code)]
     pub calculation_rate_ms: u64,
 }
@@ -58,13 +59,14 @@ impl WindState {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct HumidityState {
     pub air_humidity: f64, // %
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     #[allow(dead_code)]
     pub calculation_rate_ms: u64,
 }
@@ -85,7 +87,7 @@ impl TemperatureState {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct WindState {
     pub wind_direction_relative: f64, // ° relative to ship heading
     pub wind_velocity: f64,           // knots
@@ -93,23 +95,25 @@ pub struct WindState {
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     #[allow(dead_code)]
     pub calculation_rate_ms: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct PressureState {
     pub air_pressure: f64, // mbar or hPa
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     #[allow(dead_code)]
     pub calculation_rate_ms: u64,
 }
 
 // Combined WeatherState (for old /api/weather endpoint if still used)
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct WeatherState {
     // Weather Sensor Data
     pub air_temperature: f64,        // °C (from thermometer)
@@ -123,10 +127,11 @@ pub struct WeatherState {
     pub last_update: DateTime<Utc>,
     
     #[serde(skip)]
+    #[schema(ignore)]
     pub calculation_rate_ms: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct WeatherConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -152,7 +157,7 @@ impl Default for WeatherConfig {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, utoipa::ToSchema)]
 pub struct CreateWeatherRequest {
     pub air_temperature: f64,
     pub air_humidity: f64,
@@ -162,7 +167,7 @@ pub struct CreateWeatherRequest {
     pub is_running: bool,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateWeatherRequest {
     pub air_temperature: Option<f64>,
     pub air_humidity: Option<f64>,
@@ -172,7 +177,7 @@ pub struct UpdateWeatherRequest {
     pub is_running: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateWeatherConfigRequest {
     pub ip: Option<String>,
     pub port: Option<u16>,

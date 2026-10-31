@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 pub type SharedGpsState = Arc<RwLock<Option<GpsState>>>;
 pub type SharedGpsConfig = Arc<RwLock<GpsConfig>>;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct GpsState {
     pub latitude: f64,
     pub longitude: f64,
@@ -16,6 +16,7 @@ pub struct GpsState {
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
     #[serde(skip)]
+    #[schema(ignore)]
     pub calculation_rate_ms: u64,
 }
 
@@ -157,7 +158,7 @@ impl GpsState {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct GpsConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -186,7 +187,7 @@ impl Default for GpsConfig {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, utoipa::ToSchema)]
 pub struct CreateGpsRequest {
     pub latitude: f64,
     pub longitude: f64,
@@ -195,7 +196,7 @@ pub struct CreateGpsRequest {
     pub is_running: bool,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateGpsRequest {
     pub latitude: Option<f64>,
     pub longitude: Option<f64>,
@@ -204,7 +205,7 @@ pub struct UpdateGpsRequest {
     pub is_running: Option<bool>,
 }
 
-#[derive(Deserialize, Debug, Default)]
+#[derive(Deserialize, Debug, Default, utoipa::ToSchema)]
 pub struct UpdateGpsConfigRequest {
     pub ip: Option<String>,
     pub port: Option<u16>,
