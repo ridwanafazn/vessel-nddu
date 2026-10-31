@@ -1,0 +1,188 @@
+# 12 — Handoff & Master Prompt
+
+Dokumen ini untuk **melanjutkan pekerjaan di sesi baru** (misalnya sesi yang
+dibuka di root `C:\Users\Ridwan\Git-v2` agar bisa melihat dua repo sekaligus).
+
+---
+
+## 1. Status terakhir
+
+| Item | Status |
+|---|---|
+| Audit kode | ✅ selesai |
+| Dokumentasi (14 file) | ✅ selesai |
+| Rust toolchain | ✅ 1.99.1 terpasang |
+| Build | ✅ sukses, 0 warning |
+| Mosquitto | ✅ terpasang & berjalan (lihat §4) |
+| Port 8080 | ✅ bebas (`smile-fest-api` dimatikan) |
+| Perbaikan kode P0 | ❌ **belum dimulai** |
+| Swagger | ❌ belum |
+| Deploy HF Spaces | ❌ belum |
+
+---
+
+## 2. Dua repo
+
+| Repo | Path | Stack |
+|---|---|---|
+| Backend | `C:\Users\Ridwan\Git-v2\vessel-nddu` | Rust + Actix-web |
+| Frontend | `C:\Users\Ridwan\Git-v2\ProjectMagang-main` | React 19 + Vite + Tauri 2 |
+
+FE memakai **polling axios**, bukan WebSocket.
+Kontrak ada di `docs/02-api-contract.md` dan `docs/11-frontend-integration.md`.
+
+---
+
+## 3. Aturan kerja (wajib)
+
+1. **Baca dokumen dulu**, minimal: `README.md`, `00-context.md`,
+   `02-api-contract.md`, `04-audit-findings.md`, `06-tasks.md`.
+2. **Jangan mulai kode** sebelum konfirmasi pengguna.
+3. **Urutan:** P0 → verifikasi → P1 → verifikasi → P2.
+4. **Satu task = satu commit.** `git init` belum dilakukan.
+5. **Jangan breaking change** ke FE. Lihat `02-api-contract.md` §4.
+6. **Setiap perbaikan wajib punya bukti** (curl/log/test).
+7. Jangan mengubah `docs/` tanpa alasan; docs adalah sumber kebenaran.
+
+---
+
+## 4. Environment (sudah disiapkan)
+
+```powershell
+# Rust
+$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+rustc --version     # 1.99.1
+
+# Build & run
+cd C:\Users\Ridwan\Git-v2\vessel-nddu
+cargo build
+.\target\debug\vessel.exe
+```
+
+### Mosquitto
+
+- Terpasang: `C:\Program Files\mosquitto\`
+- Config lokal: `C:\Users\Ridwan\mosquitto\mosquitto.conf`
+  ```
+  listener 1883 127.0.0.1
+  allow_anonymous true
+  persistence false
+  log_dest stdout
+  log_type all
+  ```
+- Jalankan (manual, foreground/background):
+  ```powershell
+  & "C:\Program Files\mosquitto\mosquitto.exe" -c "C:\Users\Ridwan\mosquitto\mosquitto.conf" -v
+  ```
+- Catatan: service `mosquitto` bawaan installer memakai config default
+  (bind `::1`, anonymous ditolak). Untuk pengembangan, gunakan config di atas.
+- Verifikasi:
+  ```powershell
+  & "C:\Program Files\mosquitto\mosquitto_sub.exe" -h 127.0.0.1 -t "vessel/#" -v
+  ```
+
+### Port
+
+| Port | Protokol |
+|---|---|
+| 8080 | REST |
+| 8081 | WebSocket |
+| 9001 | TCP (stub) |
+| 1883 | MQTT |
+
+---
+
+## 5. Keputusan yang sudah final
+
+| ADR | Keputusan |
+|---|---|
+| ADR-001 | Backend-only, tanpa FE |
+| ADR-002 | Contract-first, backward-compatible |
+| ADR-003 | Swagger: `utoipa` + `utoipa-swagger-ui` (UI + JSON) |
+| ADR-004 | Mosquitto native, tanpa Docker |
+| ADR-005 | **Hugging Face Spaces (Docker)** untuk portofolio |
+| ADR-006 | Urutan P0 → P1 → P2 |
+| ADR-007 | Talker NMEA: `IIVHW`, `SDDBT`, `SDDPT`, `SDDBK` |
+| ADR-010 | Modular monolith |
+
+## 6. Keputusan yang masih terbuka
+
+| ADR | Pertanyaan | Rekomendasi |
+|---|---|---|
+| ADR-008 | Config MQTT: global vs per-sensor | **Global** dulu |
+| ADR-009 | Lisensi: AGPL / MIT / private | **MIT** untuk portofolio |
+| — | GPS JSON: `?format=json` vs `/api/gps/state` | **`?format=json`** |
+| — | `git init` sekarang? | **Ya**, sebelum Fase 0 |
+
+---
+
+## 7. Master prompt untuk sesi baru
+
+Salin blok berikut ke sesi baru:
+
+```text
+Kamu melanjutkan proyek backend Rust "vessel-nddu" (simulator sensor kapal +
+gateway NMEA/MQTT/WS) di C:\Users\Ridwan\Git-v2\vessel-nddu.
+
+Sebelum melakukan apa pun, baca berurutan:
+1. docs/README.md
+2. docs/00-context.md
+3. docs/01-architecture.md
+4. docs/02-api-contract.md
+5. docs/04-audit-findings.md
+6. docs/06-tasks.md
+7. docs/07-rust-actix-guide.md
+8. docs/10-decisions.md
+
+Konteks penting:
+- Ini backend murni. FE (React+Tauri) ada di C:\Users\Ridwan\Git-v2\ProjectMagang-main
+  dan memakai polling axios, bukan WebSocket.
+- Kontrak API TIDAK boleh breaking. GET /api/gps saat ini mengembalikan NMEA
+  text/plain, sedangkan FE mengharapkan JSON. Solusi yang disepakati:
+  tambah ?format=json tanpa mengubah default.
+- MQTT wajib. Mosquitto sudah terpasang; config di
+  C:\Users\Ridwan\mosquitto\mosquitto.conf; jalankan dengan -c file itu.
+- Deployment target: Hugging Face Spaces (Docker), gratis, tanpa kartu.
+  Syarat utama: Swagger/OpenAPI harus ada.
+- Swagger memakai utoipa + utoipa-swagger-ui (UI + JSON).
+
+Tugas saat ini: Fase 0 (lihat docs/06-tasks.md), urutan:
+1. git init + baseline commit
+2. P0-03 NMEA talker ID (IIVHW, SDDBT, SDDPT, SDDBK)
+3. P0-04 depth TCP beku
+4. P1-01 tracing aktif (wajib sebelum P0-01)
+5. P0-01 MQTT fail-safe (jangan deadlock saat broker mati)
+6. P0-02 config MQTT benar-benar dipakai
+7. P1-02 env config, P1-13 log port, P1-14 GPS JSON
+8. Verifikasi end-to-end
+
+Aturan:
+- Jangan mulai kode sebelum saya bilang "gas".
+- Satu task = satu commit.
+- Setiap task: tunjukkan bukti verifikasi (curl/log/test).
+- Jangan mengubah docs/02-api-contract.md tanpa memberi tahu saya.
+- Jangan menyentuh FE kecuali saya minta.
+
+Mulai dengan membaca dokumen dan meringkas: (a) status saat ini,
+(b) 4 bug P0, (c) keputusan yang masih terbuka, (d) rencana eksekusi.
+Jangan menulis kode dulu.
+```
+
+---
+
+## 8. Checklist sesi baru
+
+- [ ] Buka sesi di `C:\Users\Ridwan\Git-v2` (agar dua repo terlihat)
+- [ ] Paste master prompt di atas
+- [ ] Pastikan agent membaca `docs/`
+- [ ] Konfirmasi keputusan terbuka (ADR-008, ADR-009, GPS JSON, git init)
+- [ ] Baru mulai Fase 0
+
+---
+
+## 9. Jika tetap di sesi ini
+
+Tidak masalah — sesi ini sudah punya konteks lengkap. Yang perlu dilakukan:
+1. Konfirmasi keputusan terbuka.
+2. Bilang "gas Fase 0".
+3. Saya eksekusi task per task dengan bukti.
