@@ -3,10 +3,13 @@ mod services;
 mod controllers;
 mod routes;
 mod utils;
+mod config;
+mod telemetry;
 
 use actix_cors::Cors;
 use actix_web::{web, App, HttpServer, http};
 use std::sync::{Arc, RwLock};
+use crate::config::AppConfig;
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState, GpsConfig};
 use crate::data::gyro_data::{SharedGyroConfig, SharedGyroState, GyroConfig};
 use crate::data::weather_data::{
@@ -23,7 +26,21 @@ use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    println!(" Server starting...");
+    let app_config = AppConfig::from_env();
+    telemetry::init(&app_config.log_level);
+
+    let http_addr = app_config.http_addr;
+    let ws_addr = app_config.ws_addr;
+    let tcp_addr = app_config.tcp_addr;
+
+    tracing::info!(
+        version = env!("CARGO_PKG_VERSION"),
+        http = %http_addr,
+        ws = %ws_addr,
+        tcp = %tcp_addr,
+        mqtt = %format!("{}:{}", app_config.mqtt.host, app_config.mqtt.port),
+        "vessel backend starting"
+    );
 
     // Shared states
     let shared_gps_config: SharedGpsConfig = Arc::new(RwLock::new(GpsConfig::default()));
@@ -61,27 +78,39 @@ async fn main() -> std::io::Result<()> {
     let (depth_command_tx, depth_command_rx) = mpsc::channel::<MqttCommand>(10);
     let (compass_command_tx, compass_command_rx) = mpsc::channel::<MqttCommand>(10);
 
-    // MQTT Client (dihubungkan dari config)
-    let mut mqttoptions = MqttOptions::new("vessel-client", "127.0.0.1", 1883);
-    mqttoptions.set_keep_alive(std::time::Duration::from_secs(5));
+    // MQTT Client (konfigurasi global dari environment)
+    let mut mqttoptions = MqttOptions::new(
+        app_config.mqtt.client_id.as_str(),
+        app_config.mqtt.host.as_str(),
+        app_config.mqtt.port,
+    );
+    mqttoptions.set_keep_alive(std::time::Duration::from_secs(
+        app_config.mqtt.keep_alive_secs,
+    ));
+    if let (Some(username), Some(password)) = (
+        app_config.mqtt.username.as_deref(),
+        app_config.mqtt.password.as_deref(),
+    ) {
+        mqttoptions.set_credentials(username, password);
+    }
     let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
     let mqtt_manager = Arc::new(MqttManager::new(client));
 
     // Jalankan MQTT eventloop di background
     tokio::spawn(async move {
-        println!(" MQTT Client connecting...");
+        tracing::info!("MQTT client connecting");
         loop {
             match eventloop.poll().await {
                 Ok(_) => {},
                 Err(e) => {
-                    eprintln!("MQTT eventloop error: {:?}", e);
+                    tracing::warn!(error = ?e, "MQTT eventloop error; retrying in 1s");
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
         }
     });
 
-    println!(" Starting background services...");
+    tracing::info!("starting background services");
 
     // Jalankan kalkulasi + publikasi
     services::gps_service::start_gps_calculation_thread(shared_gps_state.clone());
@@ -188,7 +217,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
     );
 
-    println!(" Background services running.");
+    tracing::info!("background services running");
 
     // API server
     let ws_clients_for_api = ws_clients.clone();
@@ -248,24 +277,24 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::auth_routes::init)
 
     })
-    .bind("127.0.0.1:8080")?
+    .bind(http_addr)?
     .run();
 
-    println!(" API Server started on http://127.0.0.1:8080");
+    tracing::info!(addr = %http_addr, "API server started");
 
     // WebSocket
-    let websocket_listener = TcpListener::bind("127.0.0.1:8081").await?;
+    let websocket_listener = TcpListener::bind(ws_addr).await?;
     tokio::spawn(async move {
-        println!("🔌 WebSocket server started on ws://127.0.0.1:8081");
+        tracing::info!(addr = %ws_addr, "WebSocket server started");
         while let Ok((stream, _)) = websocket_listener.accept().await {
             tokio::spawn(handle_websocket_connection(stream, ws_clients.clone()));
         }
     });
 
     // TCP
-    let tcp_listener = TcpListener::bind("127.0.0.1:9001").await?;
+    let tcp_listener = TcpListener::bind(tcp_addr).await?;
     tokio::spawn(async move {
-        println!("TCP server started on tcp://127.0.0.1:9003");
+        tracing::info!(addr = %tcp_addr, "TCP server started");
         while let Ok((socket, _)) = tcp_listener.accept().await {
             tokio::spawn(handle_tcp_connection(socket));
         }
