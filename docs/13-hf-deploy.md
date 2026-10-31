@@ -51,7 +51,17 @@ Satu port publik, sesuai batasan HF Spaces.
 
 ## 4. Push dari repo lokal
 
-Jalankan di `C:\Users\Ridwan\Git-v2\vessel-nddu`:
+Cara cepat (disarankan):
+
+```powershell
+$env:HF_TOKEN = "<token-write-anda>"
+.\scripts\deploy-hf.ps1 -User <user> -Space <space>
+```
+
+Script akan membuat branch `hf`, menyalin Dockerfile/README HF, push, lalu
+kembali ke `master`.
+
+Cara manual:
 
 ```powershell
 # branch khusus HF agar Dockerfile lokal tidak berubah
