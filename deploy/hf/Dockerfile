@@ -28,7 +28,8 @@ COPY deploy/hf/mosquitto.conf /etc/mosquitto/mosquitto.conf
 COPY deploy/hf/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh \
-    && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi
+    && mkdir -p /tmp/nginx/client_body /tmp/nginx/proxy /tmp/nginx/fastcgi /tmp/nginx/uwsgi /tmp/nginx/scgi \
+    && chmod -R 777 /tmp/nginx
 
 ENV HTTP_ADDR=127.0.0.1:8080 \
     WS_ADDR=127.0.0.1:8081 \

@@ -1,5 +1,9 @@
 # 13 — Deploy Hugging Face Spaces
 
+> ⚠️ **HF Spaces Docker sekarang PAID (2026).** Untuk deploy gratis tanpa
+> kartu, gunakan **Render Free** → [`15-render-deploy.md`](15-render-deploy.md).
+> Dokumen ini dipertahankan sebagai referensi jika Anda punya langganan PRO.
+
 Panduan langkah demi langkah. Semua file image sudah disiapkan di `deploy/hf/`.
 
 > **Tindakan manual diperlukan:** Anda perlu akun Hugging Face + token.

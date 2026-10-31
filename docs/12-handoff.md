@@ -23,7 +23,8 @@ dibuka di root `C:\Users\Ridwan\Git-v2` agar bisa melihat dua repo sekaligus).
 | Clippy/fmt | ✅ bersih (`-D warnings`) |
 | CI GitHub Actions | ✅ hijau (3m31s) |
 | Lisensi | ✅ MIT |
-| HF Spaces | 🟡 image siap; push butuh akun/token manual |
+| HF Spaces | ❌ Docker **Paid** — dibatalkan |
+| Render Free | 🟡 image siap; deploy manual (tanpa kartu) |
 
 ---
 
@@ -168,7 +169,7 @@ Konteks penting:
   tambah ?format=json tanpa mengubah default.
 - MQTT wajib. Mosquitto sudah terpasang; config di
   C:\Users\Ridwan\mosquitto\mosquitto.conf; jalankan dengan -c file itu.
-- Deployment target: Hugging Face Spaces (Docker), gratis, tanpa kartu.
+- Deployment target: **Render Free** (Docker, tanpa kartu). HF Docker = Paid.
   Syarat utama: Swagger/OpenAPI harus ada.
 - Swagger memakai utoipa + utoipa-swagger-ui (UI + JSON).
 
@@ -186,7 +187,7 @@ Tugas saat ini: Fase 2 (lihat docs/06-tasks.md), urutan:
 4. Test integrasi REST
 5. CI GitHub Actions (fmt, clippy -D warnings, test, build)
 6. Release profile
-7. Deploy HF Spaces
+7. Deploy Render Free (`15-render-deploy.md`)
 
 Aturan:
 - Jangan mulai kode sebelum saya bilang "gas".

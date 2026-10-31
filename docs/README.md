@@ -22,6 +22,7 @@ Dokumen di folder ini adalah **sumber kebenaran** untuk pengembangan bertahap.
 | 13 | [12-handoff.md](12-handoff.md) | Sesi baru — master prompt & status |
 | 14 | [13-hf-deploy.md](13-hf-deploy.md) | Deploy Hugging Face Spaces (manual steps) |
 | 15 | [14-git-strategy.md](14-git-strategy.md) | Strategi merge riwayat & publikasi GitHub |
+| 16 | [15-render-deploy.md](15-render-deploy.md) | Deploy gratis ke Render (tanpa kartu) |
 
 ## Legenda status
 

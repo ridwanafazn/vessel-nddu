@@ -102,8 +102,10 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 - [x] `docker-compose.yml` (app + mosquitto)
 - [x] `deploy/mosquitto.conf`
 - [x] `.dockerignore`
-- [x] Uji image HF lokal (`--user 1000:1000`, REST + Swagger + WS) ✅
-- [ ] Push ke HF Spaces (Docker SDK) — butuh akun/token
+- [x] Image generik `$PORT` (Render/HF)
+- [x] Uji lokal Render (`PORT=10000`, non-root, REST + Swagger + WS) ✅
+- [ ] Deploy **Render Free** (manual, tanpa kartu) — lihat `15-render-deploy.md`
+- [ ] HF Spaces Docker — **Paid**, dibatalkan
 
 ---
 
@@ -222,4 +224,6 @@ Sebuah task dianggap selesai jika:
 | 2026-10-31 | HF image | ✅ | build sukses, uji non-root, WS `/ws` |
 | 2026-10-31 | Push GitHub | ✅ | merge riwayat, fast-forward, tanpa force |
 | 2026-10-31 | CI GitHub Actions | ✅ | **hijau**, 3m31s |
-| — | Push HF Space | ⏳ | butuh akun/token manual |
+| 2026-10-31 | HF Docker | ❌ | **Paid** (dibatalkan) |
+| 2026-10-31 | Render image | ✅ | `PORT=10000`, non-root, WS `/ws` |
+| — | Deploy Render Free | ⏳ | manual, tanpa kartu |

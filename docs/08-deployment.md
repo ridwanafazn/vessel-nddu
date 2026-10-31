@@ -1,5 +1,10 @@
 # 08 — Deployment
 
+> ⚠️ **Koreksi 2026-10-31:** Hugging Face Spaces **Docker sekarang Paid**
+> (badge "Paid" di UI HF). Untuk deploy gratis tanpa kartu, gunakan
+> **Render Free** → [`15-render-deploy.md`](15-render-deploy.md).
+> Dokumen ini dipertahankan sebagai perbandingan opsi.
+
 ## 1. Kebutuhan runtime
 
 | Kebutuhan | Wajib untuk |

@@ -78,24 +78,33 @@ daemon sering mati.
 
 ## ADR-005 · Target deployment
 
-**Status:** ✅ Diterima (2026-10-31) — **Opsi A: Hugging Face Spaces (Docker)**
+**Status:** 🔁 **Digantikan oleh ADR-012** (2026-10-31)
 
-**Konteks:** Anda menyebut dua opsi: Oracle ARM (butuh kartu) dan Cloudflare
-Workers (tanpa kartu, tapi tidak bisa menjalankan binary ini). Anda menyetujui
-HF Spaces gratis **dengan syarat API docs (Swagger) tersedia**.
+**Konteks:** Awalnya dipilih Hugging Face Spaces Docker. Ternyata **Docker
+Spaces sekarang Paid** (badge "Paid" di UI HF, 2026), sehingga tidak memenuhi
+syarat "gratis tanpa kartu".
 
-**Keputusan:** Deploy binary Rust apa adanya ke **Hugging Face Spaces (Docker)**.
-REST + WebSocket + Swagger UI berjalan di satu port (7860). MQTT publish
-diarahkan ke broker eksternal (HiveMQ Cloud / EMQX Serverless) via env.
-TCP server (9001) tidak tersedia di platform ini — didokumentasikan sebagai
-keterbatasan.
+**Keputusan:** HF Docker dibatalkan. Lihat **ADR-012 (Render Free)**.
+
+---
+
+## ADR-012 · Render Free sebagai target deploy
+
+**Status:** ✅ Diterima (2026-10-31)
+
+**Konteks:** Butuh host gratis tanpa kartu yang bisa menjalankan binary Rust,
+REST, WebSocket, dan MQTT internal.
+
+**Keputusan:** Deploy ke **Render Free** (Docker web service, 512 MB,
+WebSocket didukung, plan Free tanpa kartu). Image memakai nginx + Mosquitto
+di dalam container, listen pada `$PORT` (Render: 10000).
 
 **Konsekuensi:**
-- (+) Tanpa kartu, binary asli, tidak perlu rewrite.
-- (+) Swagger + REST + WS memenuhi syarat portofolio.
-- (−) TCP server hilang; MQTT broker harus eksternal.
-- (−) Space sleep setelah 48 jam tidak aktif (cold start).
-- Opsi C (Cloudflare Worker sebagai proxy) tetap mungkin nanti tanpa rewrite.
+- (+) Gratis, tanpa kartu, binary Rust asli.
+- (+) REST + Swagger + WS `/ws` + MQTT internal jalan.
+- (−) Spin-down 15 menit (cold start ±1 menit).
+- (−) TCP server 9001 tidak diekspos.
+- (+) `render.yaml` + `deploy/hf/Dockerfile` sudah diuji lokal.
 
 ---
 
