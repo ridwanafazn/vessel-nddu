@@ -109,19 +109,47 @@ pub async fn create_gps(
     }))
 }
 
-/// [GET] /api/gps - Mengambil GPS state sebagai NMEA GPRMC sentence
-pub async fn get_gps(state: web::Data<SharedGpsState>) -> impl Responder {
+/// [GET] /api/gps - Default: NMEA GPRMC. Dengan `?format=json`: JSON untuk FE.
+#[derive(serde::Deserialize, Debug, Default)]
+pub struct GetGpsQuery {
+    pub format: Option<String>,
+}
+
+pub async fn get_gps(
+    state: web::Data<SharedGpsState>,
+    query: web::Query<GetGpsQuery>,
+) -> impl Responder {
+    let wants_json = query
+        .format
+        .as_deref()
+        .map(|f| f.eq_ignore_ascii_case("json"))
+        .unwrap_or(false);
+
     let guard = state.read().unwrap();
     match guard.as_ref() {
         Some(gps_state) => {
-            let nmea = gps_state.to_gprmc();
-            HttpResponse::Ok()
-                .content_type("text/plain")
-                .body(nmea)
-        },
-        None => HttpResponse::NotFound()
-            .content_type("text/plain")
-            .body("GPS Data not found\r\n"),
+            if wants_json {
+                HttpResponse::Ok().json(serde_json::json!({
+                    "message": "GPS retrieved successfully.",
+                    "data": gps_state
+                }))
+            } else {
+                HttpResponse::Ok()
+                    .content_type("text/plain")
+                    .body(gps_state.to_gprmc())
+            }
+        }
+        None => {
+            if wants_json {
+                HttpResponse::NotFound().json(serde_json::json!({
+                    "message": "GPS Data not found"
+                }))
+            } else {
+                HttpResponse::NotFound()
+                    .content_type("text/plain")
+                    .body("GPS Data not found\r\n")
+            }
+        }
     }
 }
 
