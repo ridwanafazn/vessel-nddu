@@ -9,25 +9,30 @@ use utoipa::OpenApi;
     info(
         title = "Vessel NDDU API",
         version = env!("CARGO_PKG_VERSION"),
-        description = "Ship sensor simulator & NMEA 0183 / MQTT / WebSocket gateway.\n\n\
-            **Kemampuan Utama:**\n\
-            - **REST API**: Kontrol & konfigurasi simulator sensor kapal (GPS, Gyro, Weather, Compass, Speed, Depth)\n\
-            - **WebSocket**: Real-time updates via `wss://vessel-nddu.onrender.com/ws` (tiap 1 detik)\n\
-            - **MQTT**: Per-sensor JSON & NMEA per sentence di `vessel/<sensor>/...`\n\
-            - **TCP**: NMEA streaming outbound client (opsional, disabled by default)\n\n\
-            **Format Response GPS:**\n\
-            - Default `GET /api/gps` → NMEA 0183 text (`$GPRMC,...`)\n\
-            - Tambah `?format=json` untuk JSON (`{message, data: {...}}`)\n\n\
-            **Autentikasi:**\n\
-            - Login: `POST /api/auth/login` dengan `{\"username\":\"admin\",\"password\":\"admin\"}`\n\
-            - Saat ini menggunakan hardcoded credentials (demo only)\n\n\
-            **Deploy:**\n\
-            - Gratis di Render Free (Docker, 512 MB RAM, WebSocket support)\n\
-            - Auto-deploy on push ke `main` branch\n\n\
-            Default `GET /api/gps` returns NMEA text; add `?format=json` for JSON."
+        description = r#"
+Ship sensor simulator & NMEA 0183 / MQTT / WebSocket gateway.
+
+Kemampuan Utama:
+- REST API: Kontrol & konfigurasi simulator sensor kapal (GPS, Gyro, Weather, Compass, Speed, Depth)
+- WebSocket: Real-time updates via wss://vessel-nddu.onrender.com/ws (tiap 1 detik)
+- MQTT: Per-sensor JSON & NMEA per sentence di vessel/<sensor>/...
+- TCP: NMEA streaming outbound client (opsional, disabled by default)
+
+Format Response GPS:
+- Default GET /api/gps → NMEA 0183 text ($GPRMC,...)
+- Tambah ?format=json untuk JSON ({message, data: {...}})
+
+Autentikasi:
+- Login: POST /api/auth/login dengan {"username":"admin","password":"admin"}
+- Saat ini menggunakan hardcoded credentials (demo only)
+
+Deploy:
+- Gratis di Render Free (Docker, 512 MB RAM, WebSocket support)
+- Auto-deploy on push ke main branch
+"#
     ),
     tags(
-        (name = "Auth", description = "Autentikasi — gunakan `admin` / `admin`"),
+        (name = "Auth", description = "Autentikasi — gunakan admin / admin"),
         (name = "GPS", description = "Simulator GPS & NMEA (GPRMC/GPGLL/GPVTG/GPZDA)"),
         (name = "Gyro", description = "Simulator gyro/attitude (HDT/HDG/ROT/XDR)"),
         (name = "Weather", description = "Simulator cuaca gabungan"),
