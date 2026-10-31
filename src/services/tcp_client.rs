@@ -2,6 +2,7 @@ use crate::data::gps_data::{SharedGpsConfig, SharedGpsState};
 use crate::data::gyro_data::SharedGyroState;
 use crate::data::weather_data::{SharedWindState, SharedTemperatureState};
 use crate::data::navigation_data::{SharedSpeedState, SharedDepthState};
+use crate::utils::nmea;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::time::{sleep, Duration};
@@ -110,13 +111,6 @@ async fn send_loop(
     config: SharedGpsConfig,
     update_rate_ms: u64,
 ) -> Result<(), String> {
-            let depth_state = {
-                let state_lock = depth_state.read().unwrap();
-                match state_lock.as_ref() {
-                    Some(s) if s.is_running => Some(s.clone()),
-                    _ => None,
-                }
-            };
     let mut interval = tokio::time::interval(Duration::from_millis(update_rate_ms));
 
     loop {
@@ -153,6 +147,13 @@ async fn send_loop(
         };
         let speed_state = {
             let state_lock = speed_state.read().unwrap();
+            match state_lock.as_ref() {
+                Some(s) if s.is_running => Some(s.clone()),
+                _ => None,
+            }
+        };
+        let depth_state = {
+            let state_lock = depth_state.read().unwrap();
             match state_lock.as_ref() {
                 Some(s) if s.is_running => Some(s.clone()),
                 _ => None,
@@ -225,6 +226,11 @@ async fn send_loop(
 
         // Send all enabled sentences
         for sentence in sentences {
+            // Jangan pernah mengirim NMEA yang tidak valid ke integrator.
+            if !nmea::validate(&sentence) {
+                tracing::warn!(sentence = %sentence.trim_end(), "Skipping invalid NMEA sentence");
+                continue;
+            }
             stream.write_all(sentence.as_bytes()).await.map_err(|e| e.to_string())?;
             stream.flush().await.map_err(|e| e.to_string())?;
         }

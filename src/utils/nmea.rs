@@ -60,6 +60,7 @@ pub fn validate(sentence: &str) -> bool {
 }
 
 /// Ambil talker ID (2 karakter pertama) dari sentence.
+#[allow(dead_code)] // dipakai test & tooling
 pub fn talker(sentence: &str) -> Option<&str> {
     let s = sentence.strip_prefix('$')?;
     let id = s.split(',').next()?;
@@ -70,6 +71,7 @@ pub fn talker(sentence: &str) -> Option<&str> {
 }
 
 /// Ambil formatter (3 karakter setelah talker).
+#[allow(dead_code)] // dipakai test & tooling
 pub fn formatter(sentence: &str) -> Option<&str> {
     let s = sentence.strip_prefix('$')?;
     let id = s.split(',').next()?;
