@@ -23,6 +23,7 @@ Dokumen di folder ini adalah **sumber kebenaran** untuk pengembangan bertahap.
 | 14 | [13-hf-deploy.md](13-hf-deploy.md) | Deploy Hugging Face Spaces (manual steps) |
 | 15 | [14-git-strategy.md](14-git-strategy.md) | Strategi merge riwayat & publikasi GitHub |
 | 16 | [15-render-deploy.md](15-render-deploy.md) | Deploy gratis ke Render (tanpa kartu) |
+| 17 | [16-fe-deploy-prompt.md](16-fe-deploy-prompt.md) | Prompt awal untuk sesi FE (React + Tauri) |
 
 ## Legenda status
 
