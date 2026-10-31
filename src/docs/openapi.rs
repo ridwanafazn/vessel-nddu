@@ -10,14 +10,24 @@ use utoipa::OpenApi;
         title = "Vessel NDDU API",
         version = env!("CARGO_PKG_VERSION"),
         description = "Ship sensor simulator & NMEA 0183 / MQTT / WebSocket gateway.\n\n\
-            - REST: simulator control & configuration\n\
-            - WebSocket: live updates (ws://host:8081)\n\
-            - MQTT: per-sensor JSON & NMEA topics\n\
-            - TCP: NMEA streaming (outbound client)\n\n\
+            **Kemampuan Utama:**\n\
+            - **REST API**: Kontrol & konfigurasi simulator sensor kapal (GPS, Gyro, Weather, Compass, Speed, Depth)\n\
+            - **WebSocket**: Real-time updates via `wss://vessel-nddu.onrender.com/ws` (tiap 1 detik)\n\
+            - **MQTT**: Per-sensor JSON & NMEA per sentence di `vessel/<sensor>/...`\n\
+            - **TCP**: NMEA streaming outbound client (opsional, disabled by default)\n\n\
+            **Format Response GPS:**\n\
+            - Default `GET /api/gps` → NMEA 0183 text (`$GPRMC,...`)\n\
+            - Tambah `?format=json` untuk JSON (`{message, data: {...}}`)\n\n\
+            **Autentikasi:**\n\
+            - Login: `POST /api/auth/login` dengan `{\"username\":\"admin\",\"password\":\"admin\"}`\n\
+            - Saat ini menggunakan hardcoded credentials (demo only)\n\n\
+            **Deploy:**\n\
+            - Gratis di Render Free (Docker, 512 MB RAM, WebSocket support)\n\
+            - Auto-deploy on push ke `main` branch\n\n\
             Default `GET /api/gps` returns NMEA text; add `?format=json` for JSON."
     ),
     tags(
-        (name = "Auth", description = "Autentikasi"),
+        (name = "Auth", description = "Autentikasi — gunakan `admin` / `admin`"),
         (name = "GPS", description = "Simulator GPS & NMEA (GPRMC/GPGLL/GPVTG/GPZDA)"),
         (name = "Gyro", description = "Simulator gyro/attitude (HDT/HDG/ROT/XDR)"),
         (name = "Weather", description = "Simulator cuaca gabungan"),
@@ -30,7 +40,8 @@ use utoipa::OpenApi;
         (name = "Depth", description = "Depth sounder (DBT/DPT/DBK)"),
         (name = "Navigation", description = "Config bersama speed & depth"),
         (name = "MQTT", description = "Konfigurasi MQTT global"),
-        (name = "Health", description = "Liveness & readiness"),
+        (name = "Health", description = "Liveness & readiness check"),
+        (name = "WebSocket", description = "Real-time updates via WebSocket"),
     ),
     paths(
         crate::controllers::auth_controller::login,
