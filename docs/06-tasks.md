@@ -141,7 +141,8 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 
 ### Q-05 · CI
 - [x] GitHub Actions: fmt, clippy, test, build
-- [ ] Badge di README (perlu repo GitHub)
+- [x] Badge di README
+- [x] **CI hijau** (run `41217440950`, 3m31s)
 
 ### Q-06 · Release profile
 - [x] `lto = "thin"`, `strip = true`, `codegen-units = 1`
@@ -219,4 +220,6 @@ Sebuah task dianggap selesai jika:
 | 2026-10-31 | CI | ✅ | GitHub Actions, clippy-clean, 18 test |
 | 2026-10-31 | Fase 2 inti | ✅ | shutdown, release profile, `/health` |
 | 2026-10-31 | HF image | ✅ | build sukses, uji non-root, WS `/ws` |
-| — | Push GitHub + HF | ⏳ | butuh akun/token manual |
+| 2026-10-31 | Push GitHub | ✅ | merge riwayat, fast-forward, tanpa force |
+| 2026-10-31 | CI GitHub Actions | ✅ | **hijau**, 3m31s |
+| — | Push HF Space | ⏳ | butuh akun/token manual |

@@ -21,6 +21,7 @@ dibuka di root `C:\Users\Ridwan\Git-v2` agar bisa melihat dua repo sekaligus).
 | **Fase 2 (CI, shutdown, release, health)** | 🟡 **sebagian** — ApiError/AppState belum |
 | Unit test | ✅ 18 test lulus |
 | Clippy/fmt | ✅ bersih (`-D warnings`) |
+| CI GitHub Actions | ✅ hijau (3m31s) |
 | Lisensi | ✅ MIT |
 | HF Spaces | 🟡 image siap; push butuh akun/token manual |
 
