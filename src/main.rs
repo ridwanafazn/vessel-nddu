@@ -22,7 +22,6 @@ use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::{Clients, handle_websocket_connection, handle_tcp_connection};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use rumqttc::{AsyncClient, MqttOptions};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -78,37 +77,8 @@ async fn main() -> std::io::Result<()> {
     let (depth_command_tx, depth_command_rx) = mpsc::channel::<MqttCommand>(10);
     let (compass_command_tx, compass_command_rx) = mpsc::channel::<MqttCommand>(10);
 
-    // MQTT Client (konfigurasi global dari environment)
-    let mut mqttoptions = MqttOptions::new(
-        app_config.mqtt.client_id.as_str(),
-        app_config.mqtt.host.as_str(),
-        app_config.mqtt.port,
-    );
-    mqttoptions.set_keep_alive(std::time::Duration::from_secs(
-        app_config.mqtt.keep_alive_secs,
-    ));
-    if let (Some(username), Some(password)) = (
-        app_config.mqtt.username.as_deref(),
-        app_config.mqtt.password.as_deref(),
-    ) {
-        mqttoptions.set_credentials(username, password);
-    }
-    let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
-    let mqtt_manager = Arc::new(MqttManager::new(client));
-
-    // Jalankan MQTT eventloop di background
-    tokio::spawn(async move {
-        tracing::info!("MQTT client connecting");
-        loop {
-            match eventloop.poll().await {
-                Ok(_) => {},
-                Err(e) => {
-                    tracing::warn!(error = ?e, "MQTT eventloop error; retrying in 1s");
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                }
-            }
-        }
-    });
+    // MQTT global (fail-safe, bisa diubah runtime lewat /api/mqtt/config)
+    let mqtt_manager = Arc::new(MqttManager::spawn(app_config.mqtt.clone()));
 
     tracing::info!("starting background services");
 
@@ -275,6 +245,7 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::depth_routes::init)
             .configure(routes::compass_routes::init)
             .configure(routes::auth_routes::init)
+            .configure(routes::mqtt_routes::init)
 
     })
     .bind(http_addr)?

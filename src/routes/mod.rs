@@ -13,6 +13,7 @@ pub mod speed_routes;
 pub mod depth_routes;
 pub mod compass_routes;
 pub mod auth_routes;
+pub mod mqtt_routes;
 
 // use actix_web::web;
 

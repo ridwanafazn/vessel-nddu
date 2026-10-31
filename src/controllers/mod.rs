@@ -13,6 +13,7 @@ pub mod speed_controller;
 pub mod depth_controller;
 pub mod compass_controller;
 pub mod auth_controller;
+pub mod mqtt_controller;
 
 use crate::utils::mqtt_manager::MqttCommand;
 use tokio::sync::mpsc;
