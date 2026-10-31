@@ -58,16 +58,21 @@ Fase 5  Operasional        Auth, persistence, metrics, deploy
 
 ## Fase 2 — Kualitas
 
-| Deliverable | Kriteria selesai |
-|---|---|
-| `ApiError` + `ResponseError` | Tidak ada `unwrap` di handler |
-| `AppState` tunggal | `main.rs` < 100 baris |
-| Graceful shutdown | Ctrl+C → semua task berhenti <2 s |
-| Test unit NMEA | Golden file + checksum |
-| Test integrasi REST | `actix_web::test` untuk 6 endpoint utama |
-| CI GitHub Actions | fmt + clippy -D warnings + test |
-| Release profile | binary < 8 MB, `lto`, `strip` |
-| Hapus dependency mati | `cargo machete` bersih |
+> **Status: 🟡 SEBAGIAN (2026-10-31)**
+> Selesai: CI, clippy-clean, fmt, graceful shutdown, release profile,
+> test OpenAPI, `/health`.
+> Belum: `ApiError`, `AppState` tunggal, test integrasi REST.
+
+| Deliverable | Kriteria selesai | Status |
+|---|---|---|
+| `ApiError` + `ResponseError` | Tidak ada `unwrap` di handler | ⏳ |
+| `AppState` tunggal | `main.rs` < 100 baris | ⏳ |
+| Graceful shutdown | Ctrl+C → task berhenti | ✅ |
+| Test unit NMEA | Golden file + checksum | ✅ |
+| Test OpenAPI | Semua path terdaftar | ✅ |
+| CI GitHub Actions | fmt + clippy -D warnings + test | ✅ |
+| Release profile | binary lebih kecil, `lto`, `strip` | ✅ |
+| Hapus dependency mati | `cargo machete` bersih | ✅ |
 
 **Estimasi:** 3–5 hari.
 

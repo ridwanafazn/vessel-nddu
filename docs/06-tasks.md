@@ -108,6 +108,11 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 
 ## Fase 2 — Kualitas
 
+> **Status: 🟡 SEBAGIAN (2026-10-31)**
+> Selesai: CI, clippy-clean, fmt, graceful shutdown, release profile,
+> test OpenAPI, `/health`.
+> Belum: `ApiError`, `AppState`, test integrasi REST.
+
 ### Q-01 · Error handling
 - [ ] `ApiError` + `ResponseError`
 - [ ] Ganti `unwrap()` lock
@@ -121,24 +126,28 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 - [ ] `main.rs` < 100 baris
 
 ### Q-03 · Shutdown
-- [ ] `CancellationToken`
-- [ ] Semua loop `select!` dengan token
-- [ ] `tokio::signal::ctrl_c`
-- [ ] Uji: Ctrl+C berhenti <2 s
+- [x] `CancellationToken`
+- [x] Semua loop `select!` dengan token
+- [x] `tokio::signal::ctrl_c`
+- [ ] Uji manual Ctrl+C
 
 ### Q-04 · Test
-- [ ] Unit NMEA (golden file)
-- [ ] Unit checksum
+- [x] Unit NMEA (golden file)
+- [x] Unit checksum
+- [x] Test OpenAPI (path & schema)
+- [x] Test config & stats
 - [ ] Integrasi REST (`actix_web::test`)
-- [ ] Test regresi P0-01..04
 
 ### Q-05 · CI
-- [ ] GitHub Actions: fmt, clippy, test, build
-- [ ] Badge di README
+- [x] GitHub Actions: fmt, clippy, test, build
+- [ ] Badge di README (perlu repo GitHub)
 
 ### Q-06 · Release profile
-- [ ] `lto = "thin"`, `strip = true`, `codegen-units = 1`
-- [ ] Ukur ukuran binary
+- [x] `lto = "thin"`, `strip = true`, `codegen-units = 1`
+- [ ] Ukur ukuran binary release
+
+### Q-07 · Health
+- [x] `GET /health` dengan status MQTT + uptime
 
 ---
 

@@ -131,6 +131,9 @@ Stop-Process -Name "Docker Desktop" -Force -ErrorAction SilentlyContinue
 curl.exe -s -o NUL -w "%{http_code}`n" http://127.0.0.1:8080/swagger-ui/
 curl.exe -s -o NUL -w "%{http_code}`n" http://127.0.0.1:8080/api-docs/openapi.json
 
+# Health
+curl.exe -s http://127.0.0.1:8080/health
+
 # login
 curl.exe -s -X POST http://127.0.0.1:8080/api/auth/login `
   -H "Content-Type: application/json" `

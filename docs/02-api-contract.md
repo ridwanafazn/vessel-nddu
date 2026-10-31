@@ -68,6 +68,7 @@
 | 35 | GET/POST/PATCH/DELETE | `/api/wind` | `{wind_direction_relative,wind_velocity,is_running}` | `{message,data}` | ❌ |
 | 36 | GET/POST/PATCH/DELETE | `/api/pressure` | `{air_pressure,is_running}` | `{message,data}` | ❌ |
 | 37 | GET/PATCH | `/api/mqtt/config` | `UpdateMqttConfigRequest` | `{message,data}` | ❌ (admin) |
+| 38 | GET | `/health` | — | `{data:{status,version,uptime_secs,mqtt_*}}` | ❌ (monitoring) |
 
 ## 3. Skema data
 

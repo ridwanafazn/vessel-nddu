@@ -18,9 +18,11 @@ dibuka di root `C:\Users\Ridwan\Git-v2` agar bisa melihat dua repo sekaligus).
 | Git repo | ✅ `git init` + baseline commit |
 | **Fase 0 (P0-01..04, P1-01/02/13/14)** | ✅ **selesai & terverifikasi** |
 | **Fase 1 (Swagger, README, Docker, hygiene)** | ✅ **selesai & terverifikasi** |
-| Unit test | ✅ 15 test lulus |
+| **Fase 2 (CI, shutdown, release, health)** | 🟡 **sebagian** — ApiError/AppState belum |
+| Unit test | ✅ 18 test lulus |
+| Clippy/fmt | ✅ bersih (`-D warnings`) |
 | Lisensi | ✅ MIT |
-| Deploy HF Spaces | ❌ belum (berikutnya) |
+| HF Spaces | 🟡 image siap; push butuh akun/token manual |
 
 ---
 
@@ -119,18 +121,23 @@ cargo build
 | — | Auth JWT: kapan? | Fase 5 (sebelum deploy publik) |
 | — | Lisensi/kepemilikan kode vs PT LEN | Konfirmasi ke pembimbing |
 
-## 6.1 Next: Fase 2
+## 6.1 Next: selesaikan Fase 2, lalu Fase 3
 
+Sisa Fase 2:
 1. `ApiError` + `ResponseError` (hilangkan `unwrap()` di handler)
 2. `AppState` tunggal (kurangi 25 `web::Data`)
-3. Graceful shutdown (`CancellationToken`)
-4. Test integrasi REST (`actix_web::test`)
-5. CI GitHub Actions: fmt, clippy `-D warnings`, test, build
-6. Release profile (`lto`, `strip`)
-7. Deploy HF Spaces (butuh Docker + port 7860 + proxy WS)
+3. Test integrasi REST (`actix_web::test`)
 
-> Untuk portofolio/loker: **Fase 2 + deploy** adalah pembeda terbesar.
-> Fase 3–5 bisa berjalan setelah lamaran dikirim.
+Fase 3:
+- Scenario engine (waypoint + speed profile)
+- Deterministic clock + seed
+- Fault injection (dropout/stale/spike/bad checksum)
+- Recording & replay NMEA
+- TCP server nyata (9001)
+- WS subscription filter + ping/pong
+
+> Untuk portofolio/loker: **Fase 2 + deploy** sudah sangat kuat.
+> Fase 3 adalah pembeda "bagus" vs "sangat hebat".
 
 ---
 

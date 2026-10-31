@@ -57,6 +57,8 @@ Dokumen di folder ini adalah **sumber kebenaran** untuk pengembangan bertahap.
 | Test | ✅ 15 unit test |
 | Fase 0 | ✅ Selesai & terverifikasi |
 | Fase 1 | ✅ Selesai (Swagger, README, Docker) |
+| Fase 2 | 🟡 Sebagian (CI, shutdown, release, `/health`) |
 | Docker | ✅ Dockerfile + compose (uji lokal opsional) |
+| HF Spaces | 🟡 image siap (`deploy/hf`), push manual |
 | Lisensi | ✅ MIT |
 | Dokumentasi | ✅ Folder ini (14 file) |
