@@ -1,12 +1,12 @@
 use crate::data::weather_data::{SharedWeatherConfig, SharedWindState};
-use crate::utils::mqtt_manager::{MqttManager, MqttCommand};
 use crate::utils;
+use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::Clients;
 use std::sync::Arc;
-use std::time::Duration;
 use std::thread;
-use tokio::sync::mpsc;
+use std::time::Duration;
 use tokio::select;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
@@ -25,7 +25,7 @@ pub fn start_wind_calculation_thread(state: SharedWindState) {
                     if wind_state.wind_velocity < 0.0 {
                         wind_state.wind_velocity = 0.0;
                     }
-                    
+
                     wind_state.wind_direction_relative += (rand::random::<f64>() - 0.5) * 10.0;
                     // Normalize to 0-360 degrees
                     if wind_state.wind_direction_relative < 0.0 {
@@ -33,9 +33,9 @@ pub fn start_wind_calculation_thread(state: SharedWindState) {
                     } else if wind_state.wind_direction_relative >= 360.0 {
                         wind_state.wind_direction_relative -= 360.0;
                     }
-                    
+
                     wind_state.last_update = chrono::Utc::now();
-                } 
+                }
             }
         }
     });
@@ -54,10 +54,15 @@ pub fn start_wind_publication_thread(
             let (update_rate, topic_prefix) = {
                 let cfg = config_state.read().unwrap();
                 let ur = cfg.update_rate.unwrap_or(1000);
-                let tp = cfg.topics.as_ref().and_then(|v| v.first()).cloned().unwrap_or_else(|| "vessel/weather".to_string());
+                let tp = cfg
+                    .topics
+                    .as_ref()
+                    .and_then(|v| v.first())
+                    .cloned()
+                    .unwrap_or_else(|| "vessel/weather".to_string());
                 (ur, tp)
             };
-            
+
             select! {
                 Some(cmd) = command_rx.recv() => {
                     match cmd {
@@ -82,7 +87,7 @@ pub fn start_wind_publication_thread(
                             };
                             let topic = format!("{}/wind", topic_prefix);
 
-                            if let Err(e) = mqtt_manager.publish_message(&[topic.clone()], payload.clone()).await {
+                            if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&topic), payload.clone()).await {
                                 eprintln!("[Wind Service]: MQTT publish error to {}: {:?}", topic, e);
                             }
 
@@ -100,7 +105,7 @@ pub fn start_wind_publication_thread(
                             if is_sentence_enabled("WIMWV") {
                                 let wimwv_sentence = wind_state.to_wimwv();
                                 let wimwv_topic = format!("{}/wimwv", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[wimwv_topic.clone()], wimwv_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&wimwv_topic), wimwv_sentence.clone()).await {
                                     eprintln!("[Wind Service]: MQTT publish error to {}: {:?}", wimwv_topic, e);
                                 }
                             }
@@ -109,7 +114,7 @@ pub fn start_wind_publication_thread(
                             if is_sentence_enabled("WIMWD") {
                                 let wimwd_sentence = wind_state.to_wimwd();
                                 let wimwd_topic = format!("{}/wimwd", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[wimwd_topic.clone()], wimwd_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&wimwd_topic), wimwd_sentence.clone()).await {
                                     eprintln!("[Wind Service]: MQTT publish error to {}: {:?}", wimwd_topic, e);
                                 }
                             }

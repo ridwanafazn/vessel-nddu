@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::data::gps_data::GpsState;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[allow(dead_code)]

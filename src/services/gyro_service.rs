@@ -1,27 +1,25 @@
 use crate::data::gyro_data::{SharedGyroConfig, SharedGyroState};
-use crate::utils::mqtt_manager::{MqttManager, MqttCommand};
 use crate::utils;
+use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::Clients;
 use std::sync::Arc;
-use std::time::Duration;
 use std::thread;
+use std::time::Duration;
+use tokio::select;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use tokio::select;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
 /// 🔹 Thread kalkulasi Gyro (lokal, non-async)
 pub fn start_gyro_calculation_thread(state: SharedGyroState) {
     let state_clone = Arc::clone(&state);
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
-            let mut guard = state_clone.write().unwrap();
-            if let Some(ref mut gyro_state) = *guard {
-                if gyro_state.is_running {
-                    utils::gyro_calculate::calculate_next_gyro_state(gyro_state);
-                }
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
+        let mut guard = state_clone.write().unwrap();
+        if let Some(ref mut gyro_state) = *guard {
+            if gyro_state.is_running {
+                utils::gyro_calculate::calculate_next_gyro_state(gyro_state);
             }
         }
     });
@@ -73,7 +71,7 @@ pub fn start_gyro_publication_thread(
                             };
                             let topic = topic_prefix.clone();
 
-                            if let Err(e) = mqtt_manager.publish_message(&[topic.clone()], payload.clone()).await {
+                            if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&topic), payload.clone()).await {
                                 eprintln!("[Gyro Service]: MQTT publish error to {}: {:?}", topic, e);
                             }
 
@@ -92,7 +90,7 @@ pub fn start_gyro_publication_thread(
                             if is_sentence_enabled("HEROT") {
                                 let rot_sentence = gyro_state.to_rot();
                                 let rot_topic = format!("{}/rot", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[rot_topic.clone()], rot_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&rot_topic), rot_sentence.clone()).await {
                                     eprintln!("[Gyro Service]: MQTT publish error to {}: {:?}", rot_topic, e);
                                 }
                             }
@@ -101,7 +99,7 @@ pub fn start_gyro_publication_thread(
                             if is_sentence_enabled("HDT") {
                                 let hdt_sentence = gyro_state.to_hdt();
                                 let hdt_topic = format!("{}/hdt", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[hdt_topic.clone()], hdt_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&hdt_topic), hdt_sentence.clone()).await {
                                     eprintln!("[Gyro Service]: MQTT publish error to {}: {:?}", hdt_topic, e);
                                 }
                             }
@@ -110,7 +108,7 @@ pub fn start_gyro_publication_thread(
                             if is_sentence_enabled("HDG") {
                                 let hdg_sentence = gyro_state.to_hdg();
                                 let hdg_topic = format!("{}/hdg", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[hdg_topic.clone()], hdg_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&hdg_topic), hdg_sentence.clone()).await {
                                     eprintln!("[Gyro Service]: MQTT publish error to {}: {:?}", hdg_topic, e);
                                 }
                             }
@@ -119,7 +117,7 @@ pub fn start_gyro_publication_thread(
                             if is_sentence_enabled("XDR") {
                                 let xdr_sentence = gyro_state.to_xdr();
                                 let xdr_topic = format!("{}/xdr", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[xdr_topic.clone()], xdr_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&xdr_topic), xdr_sentence.clone()).await {
                                     eprintln!("[Gyro Service]: MQTT publish error to {}: {:?}", xdr_topic, e);
                                 }
                             }

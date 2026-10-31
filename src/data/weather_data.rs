@@ -20,7 +20,7 @@ pub struct TemperatureState {
     pub air_temperature: f64, // °C
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]
@@ -36,7 +36,10 @@ impl WindState {
         let ref_type = "R"; // Relative to ship
         let unit = "N"; // Knots
         let status = if self.is_running { "A" } else { "V" };
-        let sentence_body = format!("WIMWV,{:.1},{},{:.1},{},{}", angle, ref_type, speed, unit, status);
+        let sentence_body = format!(
+            "WIMWV,{:.1},{},{:.1},{},{}",
+            angle, ref_type, speed, unit, status
+        );
         let checksum = Self::nmea_calculate_checksum(&sentence_body);
         format!("${}*{:02X}\r\n", sentence_body, checksum)
     }
@@ -48,7 +51,10 @@ impl WindState {
         let dir_mag = dir_true; // If no magnetic, use same as true
         let speed_kn = self.wind_velocity;
         let speed_ms = self.wind_velocity * 0.514444; // knots to m/s
-        let sentence_body = format!("WIMWD,{:.1},T,{:.1},M,{:.1},N,{:.1},M", dir_true, dir_mag, speed_kn, speed_ms);
+        let sentence_body = format!(
+            "WIMWD,{:.1},T,{:.1},M,{:.1},N,{:.1},M",
+            dir_true, dir_mag, speed_kn, speed_ms
+        );
         let checksum = Self::nmea_calculate_checksum(&sentence_body);
         format!("${}*{:02X}\r\n", sentence_body, checksum)
     }
@@ -64,7 +70,7 @@ pub struct HumidityState {
     pub air_humidity: f64, // %
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]
@@ -93,7 +99,7 @@ pub struct WindState {
     pub wind_velocity: f64,           // knots
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]
@@ -105,7 +111,7 @@ pub struct PressureState {
     pub air_pressure: f64, // mbar or hPa
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]
@@ -116,22 +122,22 @@ pub struct PressureState {
 #[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct WeatherState {
     // Weather Sensor Data
-    pub air_temperature: f64,        // °C (from thermometer)
-    pub air_humidity: f64,           // % (from hygrometer)
+    pub air_temperature: f64,         // °C (from thermometer)
+    pub air_humidity: f64,            // % (from hygrometer)
     pub wind_direction_relative: f64, // ° (from anemometer, relative to ship heading)
-    pub wind_velocity: f64,    // knots (from anemometer)
-    pub air_pressure: f64,           // mbar or hPa (from barometer)
-    
+    pub wind_velocity: f64,           // knots (from anemometer)
+    pub air_pressure: f64,            // mbar or hPa (from barometer)
+
     // Metadata
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     pub calculation_rate_ms: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema, Default)]
 pub struct WeatherConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -141,20 +147,6 @@ pub struct WeatherConfig {
     pub update_rate: Option<u64>,
     pub topics: Option<Vec<String>>,
     pub enabled_sentences: Option<Vec<String>>,
-}
-
-impl Default for WeatherConfig {
-    fn default() -> Self {
-        WeatherConfig {
-            ip: None,
-            port: None,
-            username: None,
-            password: None,
-            update_rate: None,
-            topics: None,
-            enabled_sentences: None, // None means publish all
-        }
-    }
 }
 
 #[derive(Deserialize, Debug, utoipa::ToSchema)]

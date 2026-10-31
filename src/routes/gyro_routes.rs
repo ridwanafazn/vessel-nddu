@@ -1,5 +1,5 @@
-use actix_web::web;
 use crate::controllers::gyro_controller;
+use actix_web::web;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -8,7 +8,6 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .route("", web::get().to(gyro_controller::get_gyro))
             .route("", web::patch().to(gyro_controller::update_gyro))
             .route("", web::delete().to(gyro_controller::delete_gyro))
-
             .service(
                 web::scope("/config")
                     .route("", web::get().to(gyro_controller::get_config))

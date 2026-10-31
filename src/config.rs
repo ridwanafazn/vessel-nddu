@@ -37,19 +37,31 @@ impl AppConfig {
     }
 }
 
+impl Default for MqttConfig {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".to_string(),
+            port: 1883,
+            client_id: "vessel-client".to_string(),
+            username: None,
+            password: None,
+            keep_alive_secs: 5,
+        }
+    }
+}
+
 impl MqttConfig {
     pub fn from_env() -> Self {
+        let defaults = Self::default();
         Self {
-            host: env_or("MQTT_HOST", "127.0.0.1"),
-            port: env_or("MQTT_PORT", "1883")
-                .parse()
-                .unwrap_or(1883),
-            client_id: env_or("MQTT_CLIENT_ID", "vessel-client"),
+            host: env_or("MQTT_HOST", &defaults.host),
+            port: env_or("MQTT_PORT", "1883").parse().unwrap_or(defaults.port),
+            client_id: env_or("MQTT_CLIENT_ID", &defaults.client_id),
             username: env_opt("MQTT_USERNAME"),
             password: env_opt("MQTT_PASSWORD"),
             keep_alive_secs: env_or("MQTT_KEEP_ALIVE_SECS", "5")
                 .parse()
-                .unwrap_or(5)
+                .unwrap_or(defaults.keep_alive_secs)
                 .max(5),
         }
     }
@@ -67,4 +79,20 @@ fn parse_addr(key: &str, default: &str) -> SocketAddr {
     let raw = env_or(key, default);
     raw.parse()
         .unwrap_or_else(|e| panic!("{key} tidak valid ({raw}): {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mqtt_defaults_are_stable() {
+        let cfg = MqttConfig::default();
+        assert_eq!(cfg.host, "127.0.0.1");
+        assert_eq!(cfg.port, 1883);
+        assert_eq!(cfg.client_id, "vessel-client");
+        assert_eq!(cfg.keep_alive_secs, 5);
+        assert!(cfg.username.is_none());
+        assert!(cfg.password.is_none());
+    }
 }

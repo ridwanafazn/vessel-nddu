@@ -1,10 +1,10 @@
+use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
-use chrono::Local;
 
 // Constants for magnetic compass
-pub const COMPASS_DEVIATION: f64 = 1.0;  // degrees
-pub const COMPASS_VARIATION: f64 = 3.0;  // degrees
+pub const COMPASS_DEVIATION: f64 = 1.0; // degrees
+pub const COMPASS_VARIATION: f64 = 3.0; // degrees
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CompassConfig {
@@ -28,10 +28,10 @@ impl CompassConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CompassState {
-    pub heading: f64,  // Dynamic value (0-360 degrees)
+    pub heading: f64, // Dynamic value (0-360 degrees)
     pub is_running: bool,
     pub last_update: String,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]

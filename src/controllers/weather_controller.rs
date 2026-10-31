@@ -1,11 +1,11 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx;
-use crate::docs::responses::{MessageResponse, WeatherConfigResponse, WeatherResponse};
 use crate::data::weather_data::{
-    CreateWeatherRequest, WeatherConfig, WeatherState, SharedWeatherConfig, SharedWeatherState,
-    UpdateWeatherConfigRequest, UpdateWeatherRequest,
+    CreateWeatherRequest, SharedWeatherConfig, SharedWeatherState, UpdateWeatherConfigRequest,
+    UpdateWeatherRequest, WeatherConfig, WeatherState,
 };
+use crate::docs::responses::{MessageResponse, WeatherConfigResponse, WeatherResponse};
 use crate::utils::mqtt_manager::MqttCommand;
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 // === CONFIG HANDLERS ===
@@ -46,7 +46,9 @@ pub async fn post_config(
     guard.password = patch.password.or_else(|| guard.password.clone());
     guard.update_rate = patch.update_rate.or(guard.update_rate);
     guard.topics = patch.topics.or_else(|| guard.topics.clone());
-    guard.enabled_sentences = patch.enabled_sentences.or_else(|| guard.enabled_sentences.clone());
+    guard.enabled_sentences = patch
+        .enabled_sentences
+        .or_else(|| guard.enabled_sentences.clone());
 
     let _ = command_tx.try_send(MqttCommand::Reconnect);
 
@@ -95,7 +97,10 @@ pub async fn create_weather(
 ) -> impl Responder {
     {
         let config_guard = config_state.read().unwrap();
-        if config_guard.ip.is_none() || config_guard.port.is_none() || config_guard.update_rate.is_none() {
+        if config_guard.ip.is_none()
+            || config_guard.port.is_none()
+            || config_guard.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message": "Cannot create sensor simulation: Configuration is incomplete."
             }));
@@ -147,8 +152,8 @@ pub async fn get_weather(state: web::Data<SharedWeatherState>) -> impl Responder
             "message": "Weather retrieved successfully.",
             "data": weather_state
         })),
-        None => HttpResponse::NotFound().json(serde_json::json!({ 
-            "message": "Weather Data not found" 
+        None => HttpResponse::NotFound().json(serde_json::json!({
+            "message": "Weather Data not found"
         })),
     }
 }
@@ -173,7 +178,10 @@ pub async fn update_weather(
 
     if patch.is_running == Some(true) {
         let config_guard = config_state.read().unwrap();
-        if config_guard.ip.is_none() || config_guard.port.is_none() || config_guard.update_rate.is_none() {
+        if config_guard.ip.is_none()
+            || config_guard.port.is_none()
+            || config_guard.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message": "Cannot start simulation: Configuration is incomplete."
             }));
@@ -183,25 +191,25 @@ pub async fn update_weather(
     let mut data_guard = data_state.write().unwrap();
     if let Some(ref mut weather_state) = *data_guard {
         // Partial update
-        if let Some(temp) = patch.air_temperature { 
-            weather_state.air_temperature = temp; 
+        if let Some(temp) = patch.air_temperature {
+            weather_state.air_temperature = temp;
         }
-        if let Some(humidity) = patch.air_humidity { 
-            weather_state.air_humidity = humidity; 
+        if let Some(humidity) = patch.air_humidity {
+            weather_state.air_humidity = humidity;
         }
-        if let Some(wind_dir) = patch.wind_direction_relative { 
-            weather_state.wind_direction_relative = wind_dir; 
+        if let Some(wind_dir) = patch.wind_direction_relative {
+            weather_state.wind_direction_relative = wind_dir;
         }
-        if let Some(wind_vel) = patch.wind_velocity { 
-            weather_state.wind_velocity = wind_vel; 
+        if let Some(wind_vel) = patch.wind_velocity {
+            weather_state.wind_velocity = wind_vel;
         }
-        if let Some(pressure) = patch.air_pressure { 
-            weather_state.air_pressure = pressure; 
+        if let Some(pressure) = patch.air_pressure {
+            weather_state.air_pressure = pressure;
         }
-        if let Some(is_running) = patch.is_running { 
-            weather_state.is_running = is_running; 
+        if let Some(is_running) = patch.is_running {
+            weather_state.is_running = is_running;
         }
-        
+
         weather_state.last_update = Utc::now();
 
         HttpResponse::Ok().json(serde_json::json!({
@@ -209,8 +217,8 @@ pub async fn update_weather(
             "data": weather_state.clone()
         }))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({ 
-            "message": "Weather Data not found to update" 
+        HttpResponse::NotFound().json(serde_json::json!({
+            "message": "Weather Data not found to update"
         }))
     }
 }
@@ -228,12 +236,12 @@ pub async fn delete_weather(state: web::Data<SharedWeatherState>) -> impl Respon
     let mut guard = state.write().unwrap();
     if guard.is_some() {
         *guard = None;
-        HttpResponse::Ok().json(serde_json::json!({ 
-            "message": "Success to delete Weather data." 
+        HttpResponse::Ok().json(serde_json::json!({
+            "message": "Success to delete Weather data."
         }))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({ 
-            "message": "Weather running currently not found" 
+        HttpResponse::NotFound().json(serde_json::json!({
+            "message": "Weather running currently not found"
         }))
     }
 }

@@ -1,12 +1,12 @@
-use crate::data::navigation_data::{SharedNavigationConfig, SharedDepthState};
-use crate::utils::mqtt_manager::{MqttManager, MqttCommand};
+use crate::data::navigation_data::{SharedDepthState, SharedNavigationConfig};
 use crate::utils;
+use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::Clients;
 use std::sync::Arc;
-use std::time::Duration;
 use std::thread;
-use tokio::sync::mpsc;
+use std::time::Duration;
 use tokio::select;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
@@ -14,14 +14,12 @@ const CALCULATION_INTERVAL_MS: u64 = 100;
 /// Thread perhitungan Depth (lokal, non-async)
 pub fn start_depth_calculation_thread(state: SharedDepthState) {
     let state_clone = Arc::clone(&state);
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
-            let mut guard = state_clone.write().unwrap();
-            if let Some(ref mut depth_state) = *guard {
-                if depth_state.is_running {
-                    utils::navigation_calculate::calculate_next_depth_state(depth_state);
-                }
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
+        let mut guard = state_clone.write().unwrap();
+        if let Some(ref mut depth_state) = *guard {
+            if depth_state.is_running {
+                utils::navigation_calculate::calculate_next_depth_state(depth_state);
             }
         }
     });
@@ -40,10 +38,15 @@ pub fn start_depth_publication_thread(
             let (update_rate, topic_prefix) = {
                 let cfg = config_state.read().unwrap();
                 let ur = cfg.update_rate.unwrap_or(1000);
-                let tp = cfg.topics.as_ref().and_then(|v| v.first()).cloned().unwrap_or_else(|| "vessel/navigation".to_string());
+                let tp = cfg
+                    .topics
+                    .as_ref()
+                    .and_then(|v| v.first())
+                    .cloned()
+                    .unwrap_or_else(|| "vessel/navigation".to_string());
                 (ur, tp)
             };
-            
+
             select! {
                 Some(cmd) = command_rx.recv() => {
                     match cmd {
@@ -68,7 +71,7 @@ pub fn start_depth_publication_thread(
                             };
                             let topic = format!("{}/depth", topic_prefix);
 
-                            if let Err(e) = mqtt_manager.publish_message(&[topic.clone()], payload.clone()).await {
+                            if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&topic), payload.clone()).await {
                                 eprintln!("[Depth Service]: MQTT publish error to {}: {:?}", topic, e);
                             }
 
@@ -86,7 +89,7 @@ pub fn start_depth_publication_thread(
                             if is_sentence_enabled("DBT") {
                                 let dbt_sentence = depth_state.to_dbt();
                                 let dbt_topic = format!("{}/dbt", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[dbt_topic.clone()], dbt_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&dbt_topic), dbt_sentence.clone()).await {
                                     eprintln!("[Depth Service]: MQTT publish error to {}: {:?}", dbt_topic, e);
                                 }
                             }
@@ -94,7 +97,7 @@ pub fn start_depth_publication_thread(
                             if is_sentence_enabled("DPT") {
                                 let dpt_sentence = depth_state.to_dpt();
                                 let dpt_topic = format!("{}/dpt", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[dpt_topic.clone()], dpt_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&dpt_topic), dpt_sentence.clone()).await {
                                     eprintln!("[Depth Service]: MQTT publish error to {}: {:?}", dpt_topic, e);
                                 }
                             }
@@ -102,7 +105,7 @@ pub fn start_depth_publication_thread(
                             if is_sentence_enabled("DBK") {
                                 let dbk_sentence = depth_state.to_dbk();
                                 let dbk_topic = format!("{}/dbk", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[dbk_topic.clone()], dbk_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&dbk_topic), dbk_sentence.clone()).await {
                                     eprintln!("[Depth Service]: MQTT publish error to {}: {:?}", dbk_topic, e);
                                 }
                             }

@@ -1,6 +1,6 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::data::weather_data::{SharedWeatherConfig, SharedWindState, WindState};
 use crate::docs::responses::{MessageResponse, WindResponse};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -43,7 +43,8 @@ pub async fn create_wind(
 
     let mut guard = data_state.write().unwrap();
     if guard.is_some() {
-        return HttpResponse::Conflict().json(serde_json::json!({"message":"Wind instance already exists."}));
+        return HttpResponse::Conflict()
+            .json(serde_json::json!({"message":"Wind instance already exists."}));
     }
 
     let req = body.into_inner();
@@ -57,7 +58,8 @@ pub async fn create_wind(
 
     *guard = Some(new_state.clone());
 
-    HttpResponse::Created().json(serde_json::json!({"message":"Wind created successfully.", "data": new_state }))
+    HttpResponse::Created()
+        .json(serde_json::json!({"message":"Wind created successfully.", "data": new_state }))
 }
 
 #[utoipa::path(
@@ -104,13 +106,20 @@ pub async fn update_wind(
 
     let mut guard = data_state.write().unwrap();
     if let Some(ref mut s) = *guard {
-        if let Some(dir) = patch.wind_direction_relative { s.wind_direction_relative = dir; }
-        if let Some(vel) = patch.wind_velocity { s.wind_velocity = vel; }
-        if let Some(run) = patch.is_running { s.is_running = run; }
+        if let Some(dir) = patch.wind_direction_relative {
+            s.wind_direction_relative = dir;
+        }
+        if let Some(vel) = patch.wind_velocity {
+            s.wind_velocity = vel;
+        }
+        if let Some(run) = patch.is_running {
+            s.is_running = run;
+        }
         s.last_update = Utc::now();
         HttpResponse::Ok().json(serde_json::json!({"message":"Wind updated successfully.", "data": {"wind_direction_relative": s.wind_direction_relative, "wind_velocity": s.wind_velocity, "is_running": s.is_running, "last_update": s.last_update}}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({"message":"Wind data not found to update"}))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({"message":"Wind data not found to update"}))
     }
 }
 
@@ -129,6 +138,7 @@ pub async fn delete_wind(state: web::Data<SharedWindState>) -> impl Responder {
         *guard = None;
         HttpResponse::Ok().json(serde_json::json!({"message":"Success to delete Wind data."}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({"message":"Wind running currently not found"}))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({"message":"Wind running currently not found"}))
     }
 }

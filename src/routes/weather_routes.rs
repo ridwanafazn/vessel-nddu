@@ -1,5 +1,5 @@
-use actix_web::web;
 use crate::controllers::weather_controller;
+use actix_web::web;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -9,7 +9,6 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .route("", web::get().to(weather_controller::get_weather))
             .route("", web::patch().to(weather_controller::update_weather))
             .route("", web::delete().to(weather_controller::delete_weather))
-
             // Weather Config endpoints
             .service(
                 web::scope("/config")

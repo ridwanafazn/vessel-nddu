@@ -1,12 +1,12 @@
 use crate::data::navigation_data::{SharedNavigationConfig, SharedSpeedState};
-use crate::utils::mqtt_manager::{MqttManager, MqttCommand};
 use crate::utils;
+use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::Clients;
 use std::sync::Arc;
-use std::time::Duration;
 use std::thread;
-use tokio::sync::mpsc;
+use std::time::Duration;
 use tokio::select;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
@@ -14,14 +14,12 @@ const CALCULATION_INTERVAL_MS: u64 = 100;
 /// Thread perhitungan Speed (lokal, non-async)
 pub fn start_speed_calculation_thread(state: SharedSpeedState) {
     let state_clone = Arc::clone(&state);
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
-            let mut guard = state_clone.write().unwrap();
-            if let Some(ref mut speed_state) = *guard {
-                if speed_state.is_running {
-                    utils::navigation_calculate::calculate_next_speed_state(speed_state);
-                }
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
+        let mut guard = state_clone.write().unwrap();
+        if let Some(ref mut speed_state) = *guard {
+            if speed_state.is_running {
+                utils::navigation_calculate::calculate_next_speed_state(speed_state);
             }
         }
     });
@@ -40,10 +38,15 @@ pub fn start_speed_publication_thread(
             let (update_rate, topic_prefix) = {
                 let cfg = config_state.read().unwrap();
                 let ur = cfg.update_rate.unwrap_or(1000);
-                let tp = cfg.topics.as_ref().and_then(|v| v.first()).cloned().unwrap_or_else(|| "vessel/navigation".to_string());
+                let tp = cfg
+                    .topics
+                    .as_ref()
+                    .and_then(|v| v.first())
+                    .cloned()
+                    .unwrap_or_else(|| "vessel/navigation".to_string());
                 (ur, tp)
             };
-            
+
             select! {
                 Some(cmd) = command_rx.recv() => {
                     match cmd {
@@ -68,7 +71,7 @@ pub fn start_speed_publication_thread(
                             };
                             let topic = format!("{}/speed", topic_prefix);
 
-                            if let Err(e) = mqtt_manager.publish_message(&[topic.clone()], payload.clone()).await {
+                            if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&topic), payload.clone()).await {
                                 eprintln!("[Speed Service]: MQTT publish error to {}: {:?}", topic, e);
                             }
 
@@ -86,7 +89,7 @@ pub fn start_speed_publication_thread(
                             if is_sentence_enabled("VHW") {
                                 let vhw_sentence = speed_state.to_vhw();
                                 let vhw_topic = format!("{}/vhw", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[vhw_topic.clone()], vhw_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&vhw_topic), vhw_sentence.clone()).await {
                                     eprintln!("[Speed Service]: MQTT publish error to {}: {:?}", vhw_topic, e);
                                 }
                             }

@@ -112,9 +112,7 @@ impl MqttManager {
                 self.stats.dropped.fetch_add(1, Ordering::Relaxed);
                 Ok(())
             }
-            Err(mpsc::error::TrySendError::Closed(_)) => {
-                Err("MQTT publish queue closed".into())
-            }
+            Err(mpsc::error::TrySendError::Closed(_)) => Err("MQTT publish queue closed".into()),
         }
     }
 }
@@ -133,11 +131,9 @@ async fn supervisor(
             "MQTT connecting"
         );
 
-        let mut options =
-            MqttOptions::new(cfg.client_id.as_str(), cfg.host.as_str(), cfg.port);
+        let mut options = MqttOptions::new(cfg.client_id.as_str(), cfg.host.as_str(), cfg.port);
         options.set_keep_alive(Duration::from_secs(cfg.keep_alive_secs));
-        if let (Some(username), Some(password)) =
-            (cfg.username.as_deref(), cfg.password.as_deref())
+        if let (Some(username), Some(password)) = (cfg.username.as_deref(), cfg.password.as_deref())
         {
             options.set_credentials(username, password);
         }
@@ -212,5 +208,18 @@ async fn supervisor(
         if !config_changed {
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stats_start_at_zero_and_disconnected() {
+        let stats = MqttStats::default();
+        assert_eq!(stats.published(), 0);
+        assert_eq!(stats.dropped(), 0);
+        assert!(!stats.connected());
     }
 }

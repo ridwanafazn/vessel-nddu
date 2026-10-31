@@ -1,7 +1,7 @@
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState};
 use crate::data::gyro_data::SharedGyroState;
-use crate::data::weather_data::{SharedWindState, SharedTemperatureState};
-use crate::data::navigation_data::{SharedSpeedState, SharedDepthState};
+use crate::data::navigation_data::{SharedDepthState, SharedSpeedState};
+use crate::data::weather_data::{SharedTemperatureState, SharedWindState};
 use crate::utils::nmea;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
@@ -12,7 +12,9 @@ fn is_sentence_enabled(config: &crate::data::gps_data::GpsConfig, sentence_type:
     match &config.enabled_sentences {
         None => true, // If not configured, send all (backward compatible)
         Some(sentences) if sentences.is_empty() => true, // Empty list means send all
-        Some(sentences) => sentences.iter().any(|s| s.eq_ignore_ascii_case(sentence_type)),
+        Some(sentences) => sentences
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case(sentence_type)),
     }
 }
 
@@ -88,8 +90,10 @@ pub async fn start_tcp_client(
             speed_state.clone(),
             depth_state.clone(),
             config.clone(),
-            update_rate
-        ).await {
+            update_rate,
+        )
+        .await
+        {
             eprintln!(
                 "Connection to {} lost: {}. Reconnecting in {} seconds...",
                 target, e, RECONNECT_DELAY_SECS
@@ -100,6 +104,7 @@ pub async fn start_tcp_client(
 }
 
 /// Internal function that handles the sending loop once connected
+#[allow(clippy::too_many_arguments)]
 async fn send_loop(
     mut stream: TcpStream,
     gps_state: SharedGpsState,
@@ -231,7 +236,10 @@ async fn send_loop(
                 tracing::warn!(sentence = %sentence.trim_end(), "Skipping invalid NMEA sentence");
                 continue;
             }
-            stream.write_all(sentence.as_bytes()).await.map_err(|e| e.to_string())?;
+            stream
+                .write_all(sentence.as_bytes())
+                .await
+                .map_err(|e| e.to_string())?;
             stream.flush().await.map_err(|e| e.to_string())?;
         }
     }

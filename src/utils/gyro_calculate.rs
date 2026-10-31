@@ -19,7 +19,7 @@ pub fn calculate_next_gyro_state(state: &mut GyroState) {
     let new_yaw = state.yaw + state.yaw_rate * dt_seconds;
     state.yaw = normalize_yaw(new_yaw);
     let t = Utc::now().timestamp_millis() as f64 / 1000.0;
-    
+
     // Panggilan ini yang menyebabkan warning, sekarang akan diabaikan oleh compiler.
     let mut rng = rng();
     let normal = Normal::new(0.0, 0.05).unwrap();

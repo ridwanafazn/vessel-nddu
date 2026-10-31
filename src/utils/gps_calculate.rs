@@ -63,5 +63,6 @@ pub fn calculate_next_gps_state(state: &mut GpsState) {
     state.latitude = rad_to_deg(new_lat_rad).clamp(-90.0, 90.0);
     state.longitude = (rad_to_deg(new_lon_rad) + 180.0).rem_euclid(360.0) - 180.0;
     state.last_update = Utc::now();
-    state.variation = calculate_magnetic_variation(state.latitude, state.longitude, &state.last_update);
+    state.variation =
+        calculate_magnetic_variation(state.latitude, state.longitude, &state.last_update);
 }

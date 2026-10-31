@@ -1,5 +1,5 @@
-use actix_web::web;
 use crate::controllers::compass_controller;
+use actix_web::web;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -8,7 +8,6 @@ pub fn init(cfg: &mut web::ServiceConfig) {
             .route("", web::get().to(compass_controller::get_compass))
             .route("", web::patch().to(compass_controller::patch_compass))
             .route("", web::delete().to(compass_controller::delete_compass))
-            
             .service(
                 web::scope("/config")
                     .route("", web::get().to(compass_controller::get_config))

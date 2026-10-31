@@ -1,30 +1,32 @@
-mod data;
-mod services;
-mod controllers;
-mod routes;
-mod utils;
 mod config;
-mod telemetry;
+mod controllers;
+mod data;
 mod docs;
+mod routes;
+mod services;
+mod telemetry;
+mod utils;
 
-use actix_cors::Cors;
-use actix_web::{web, App, HttpServer, http};
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
-use std::sync::{Arc, RwLock};
 use crate::config::AppConfig;
-use crate::data::gps_data::{SharedGpsConfig, SharedGpsState, GpsConfig};
-use crate::data::gyro_data::{SharedGyroConfig, SharedGyroState, GyroConfig};
-use crate::data::weather_data::{
-    SharedWeatherConfig, SharedWeatherState, WeatherConfig,
-    SharedTemperatureState, SharedHumidityState, SharedWindState, SharedPressureState
-};
-use crate::data::navigation_data::{SharedNavigationConfig, SharedSpeedState, SharedDepthState, NavigationConfig};
 use crate::data::compass_data::{SharedCompassConfig, SharedCompassState};
+use crate::data::gps_data::{GpsConfig, SharedGpsConfig, SharedGpsState};
+use crate::data::gyro_data::{GyroConfig, SharedGyroConfig, SharedGyroState};
+use crate::data::navigation_data::{
+    NavigationConfig, SharedDepthState, SharedNavigationConfig, SharedSpeedState,
+};
+use crate::data::weather_data::{
+    SharedHumidityState, SharedPressureState, SharedTemperatureState, SharedWeatherConfig,
+    SharedWeatherState, SharedWindState, WeatherConfig,
+};
 use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
-use crate::utils::net::{Clients, handle_websocket_connection, handle_tcp_connection};
+use crate::utils::net::{handle_tcp_connection, handle_websocket_connection, Clients};
+use actix_cors::Cors;
+use actix_web::{http, web, App, HttpServer};
+use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -47,23 +49,25 @@ async fn main() -> std::io::Result<()> {
     // Shared states
     let shared_gps_config: SharedGpsConfig = Arc::new(RwLock::new(GpsConfig::default()));
     let shared_gyro_config: SharedGyroConfig = Arc::new(RwLock::new(GyroConfig::default()));
-    let shared_weather_config: SharedWeatherConfig = Arc::new(RwLock::new(WeatherConfig::default()));
-    let shared_navigation_config: SharedNavigationConfig = Arc::new(RwLock::new(NavigationConfig::default()));
+    let shared_weather_config: SharedWeatherConfig =
+        Arc::new(RwLock::new(WeatherConfig::default()));
+    let shared_navigation_config: SharedNavigationConfig =
+        Arc::new(RwLock::new(NavigationConfig::default()));
     let shared_compass_config: SharedCompassConfig = Arc::new(RwLock::new(None));
     let shared_gps_state: SharedGpsState = Arc::new(RwLock::new(None));
     let shared_gyro_state: SharedGyroState = Arc::new(RwLock::new(None));
     let shared_weather_state: SharedWeatherState = Arc::new(RwLock::new(None));
-    
+
     // Individual weather sensor states
     let shared_temperature_state: SharedTemperatureState = Arc::new(RwLock::new(None));
     let shared_humidity_state: SharedHumidityState = Arc::new(RwLock::new(None));
     let shared_wind_state: SharedWindState = Arc::new(RwLock::new(None));
     let shared_pressure_state: SharedPressureState = Arc::new(RwLock::new(None));
-    
+
     // Navigation sensor states
     let shared_speed_state: SharedSpeedState = Arc::new(RwLock::new(None));
     let shared_depth_state: SharedDepthState = Arc::new(RwLock::new(None));
-    
+
     // Compass sensor state
     let shared_compass_state: SharedCompassState = Arc::new(RwLock::new(None));
     let ws_clients: Clients = Arc::new(tokio::sync::RwLock::new(Vec::new()));
@@ -125,7 +129,9 @@ async fn main() -> std::io::Result<()> {
     );
 
     // Individual weather sensor services
-    services::temperature_service::start_temperature_calculation_thread(shared_temperature_state.clone());
+    services::temperature_service::start_temperature_calculation_thread(
+        shared_temperature_state.clone(),
+    );
     services::temperature_service::start_temperature_publication_thread(
         shared_weather_config.clone(),
         shared_temperature_state.clone(),
@@ -236,7 +242,7 @@ async fn main() -> std::io::Result<()> {
                     .allowed_headers(vec![
                         http::header::AUTHORIZATION,
                         http::header::ACCEPT,
-                        http::header::CONTENT_TYPE
+                        http::header::CONTENT_TYPE,
                     ])
                     .max_age(3600),
             )
@@ -253,7 +259,6 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::compass_routes::init)
             .configure(routes::auth_routes::init)
             .configure(routes::mqtt_routes::init)
-
     })
     .bind(http_addr)?
     .run();

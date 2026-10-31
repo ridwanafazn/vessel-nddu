@@ -34,19 +34,27 @@ impl GpsState {
         let abs_value = value.abs();
         let degrees = abs_value.floor();
         let minutes = (abs_value - degrees) * 60.0;
-        
+
         let coord_str = if is_latitude {
             format!("{:02}{:07.4}", degrees as i32, minutes)
         } else {
             format!("{:03}{:07.4}", degrees as i32, minutes)
         };
-        
+
         let direction = if is_latitude {
-            if value >= 0.0 { "N" } else { "S" }
+            if value >= 0.0 {
+                "N"
+            } else {
+                "S"
+            }
         } else {
-            if value >= 0.0 { "E" } else { "W" }
+            if value >= 0.0 {
+                "E"
+            } else {
+                "W"
+            }
         };
-        
+
         (coord_str, direction)
     }
 
@@ -60,26 +68,36 @@ impl GpsState {
     pub fn to_gprmc(&self) -> String {
         let time_str = self.format_time();
         let status = if self.is_running { "A" } else { "V" };
-        
+
         let (lat_str, lat_dir) = Self::format_coordinate(self.latitude, true);
         let (lon_str, lon_dir) = Self::format_coordinate(self.longitude, false);
-        
+
         let speed_str = format!("{:.1}", self.sog);
         let course_str = format!("{:.1}", self.cog);
         let date_str = self.last_update.format("%d%m%y").to_string();
-        
+
         let var_abs = self.variation.abs();
         let var_str = format!("{:.1}", var_abs);
         let var_dir = if self.variation >= 0.0 { "E" } else { "W" };
-        
+
         let mode = if self.is_running { "A" } else { "N" };
-        
+
         let sentence_body = format!(
             "GPRMC,{},{},{},{},{},{},{},{},{},{},{},{}",
-            time_str, status, lat_str, lat_dir, lon_str, lon_dir,
-            speed_str, course_str, date_str, var_str, var_dir, mode
+            time_str,
+            status,
+            lat_str,
+            lat_dir,
+            lon_str,
+            lon_dir,
+            speed_str,
+            course_str,
+            date_str,
+            var_str,
+            var_dir,
+            mode
         );
-        
+
         let checksum = Self::nmea_calculate_checksum(&sentence_body);
         format!("${}*{:02X}\r\n", sentence_body, checksum)
     }
@@ -92,12 +110,12 @@ impl GpsState {
         let time_str = self.format_time();
         let status = if self.is_running { "A" } else { "V" };
         let mode = if self.is_running { "A" } else { "N" };
-        
+
         let sentence_body = format!(
             "GPGLL,{},{},{},{},{},{},{}",
             lat_str, lat_dir, lon_str, lon_dir, time_str, status, mode
         );
-        
+
         let checksum = Self::nmea_calculate_checksum(&sentence_body);
         format!("${}*{:02X}\r\n", sentence_body, checksum)
     }
@@ -134,8 +152,8 @@ impl GpsState {
     /// Converts GPS state to NMEA 0183 GPZDA sentence
     /// Format: $GPZDA,hhmmss.ss,dd,mm,yyyy,xx,xx*hh<CR><LF>
     pub fn to_gpzda(&self) -> String {
-        use chrono::Timelike;
         use chrono::Datelike;
+        use chrono::Timelike;
         let t = self.last_update;
         // hhmmss.ss
         let hour = t.hour();
@@ -150,7 +168,8 @@ impl GpsState {
         // Local zone hours and minutes (always 00,00 for UTC)
         let lzh = 0;
         let lzm = 0;
-        let sentence_body = format!("GPZDA,{},{:02},{:02},{:04},{:02},{:02}",
+        let sentence_body = format!(
+            "GPZDA,{},{:02},{:02},{:04},{:02},{:02}",
             time_str, day, month, year, lzh, lzm
         );
         let checksum = Self::nmea_calculate_checksum(&sentence_body);

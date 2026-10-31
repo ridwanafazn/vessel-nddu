@@ -1,5 +1,5 @@
+use crate::data::auth_data::{LoginRequest, LoginResponse, ADMIN_PASSWORD, ADMIN_USERNAME};
 use actix_web::{web, HttpResponse, Responder};
-use crate::data::auth_data::{LoginRequest, LoginResponse, ADMIN_USERNAME, ADMIN_PASSWORD};
 
 #[utoipa::path(
     post,
@@ -13,7 +13,7 @@ use crate::data::auth_data::{LoginRequest, LoginResponse, ADMIN_USERNAME, ADMIN_
 )]
 pub async fn login(body: web::Json<LoginRequest>) -> impl Responder {
     let request = body.into_inner();
-    
+
     // Validate credentials against hardcoded values
     if request.username == ADMIN_USERNAME && request.password == ADMIN_PASSWORD {
         HttpResponse::Ok().json(LoginResponse {

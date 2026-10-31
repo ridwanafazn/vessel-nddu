@@ -1,6 +1,6 @@
-use actix_web::{web, HttpResponse, Responder};
-use crate::data::weather_data::{SharedWeatherConfig, SharedTemperatureState, TemperatureState};
+use crate::data::weather_data::{SharedTemperatureState, SharedWeatherConfig, TemperatureState};
 use crate::docs::responses::{MessageResponse, TemperatureResponse};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -42,7 +42,8 @@ pub async fn create_temperature(
 
     let mut guard = data_state.write().unwrap();
     if guard.is_some() {
-        return HttpResponse::Conflict().json(serde_json::json!({"message":"Temperature instance already exists."}));
+        return HttpResponse::Conflict()
+            .json(serde_json::json!({"message":"Temperature instance already exists."}));
     }
 
     let req = body.into_inner();
@@ -55,7 +56,9 @@ pub async fn create_temperature(
 
     *guard = Some(new_state.clone());
 
-    HttpResponse::Created().json(serde_json::json!({"message":"Temperature created successfully.", "data": new_state }))
+    HttpResponse::Created().json(
+        serde_json::json!({"message":"Temperature created successfully.", "data": new_state }),
+    )
 }
 
 #[utoipa::path(
@@ -102,12 +105,17 @@ pub async fn update_temperature(
 
     let mut guard = data_state.write().unwrap();
     if let Some(ref mut s) = *guard {
-        if let Some(temp) = patch.air_temperature { s.air_temperature = temp; }
-        if let Some(run) = patch.is_running { s.is_running = run; }
+        if let Some(temp) = patch.air_temperature {
+            s.air_temperature = temp;
+        }
+        if let Some(run) = patch.is_running {
+            s.is_running = run;
+        }
         s.last_update = Utc::now();
         HttpResponse::Ok().json(serde_json::json!({"message":"Temperature updated successfully.", "data": {"air_temperature": s.air_temperature, "is_running": s.is_running, "last_update": s.last_update}}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({"message":"Temperature data not found to update"}))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({"message":"Temperature data not found to update"}))
     }
 }
 
@@ -124,8 +132,10 @@ pub async fn delete_temperature(state: web::Data<SharedTemperatureState>) -> imp
     let mut guard = state.write().unwrap();
     if guard.is_some() {
         *guard = None;
-        HttpResponse::Ok().json(serde_json::json!({"message":"Success to delete Temperature data."}))
+        HttpResponse::Ok()
+            .json(serde_json::json!({"message":"Success to delete Temperature data."}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({"message":"Temperature running currently not found"}))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({"message":"Temperature running currently not found"}))
     }
 }

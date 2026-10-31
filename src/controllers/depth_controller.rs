@@ -1,9 +1,8 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::data::navigation_data::{
-    SharedNavigationConfig, SharedDepthState, DepthState,
-    CreateDepthRequest, UpdateDepthRequest,
+    CreateDepthRequest, DepthState, SharedDepthState, SharedNavigationConfig, UpdateDepthRequest,
 };
 use crate::docs::responses::{DepthResponse, MessageResponse};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
@@ -25,7 +24,12 @@ pub async fn create_depth(
 ) -> impl Responder {
     {
         let cfg = config_state.read().unwrap();
-        if cfg.ip.is_none() || cfg.port.is_none() || cfg.username.is_none() || cfg.password.is_none() || cfg.update_rate.is_none() {
+        if cfg.ip.is_none()
+            || cfg.port.is_none()
+            || cfg.username.is_none()
+            || cfg.password.is_none()
+            || cfg.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message":"Cannot create sensor simulation: Configuration is incomplete."
             }));
@@ -48,7 +52,7 @@ pub async fn create_depth(
         last_update: Utc::now(),
         calculation_rate_ms: CALCULATION_INTERVAL_MS,
     };
-    
+
     // Calculate UKC
     new_state.calculate_ukc();
 
@@ -102,7 +106,12 @@ pub async fn update_depth(
 
     if patch.is_running == Some(true) {
         let cfg = config_state.read().unwrap();
-        if cfg.ip.is_none() || cfg.port.is_none() || cfg.username.is_none() || cfg.password.is_none() || cfg.update_rate.is_none() {
+        if cfg.ip.is_none()
+            || cfg.port.is_none()
+            || cfg.username.is_none()
+            || cfg.password.is_none()
+            || cfg.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message":"Cannot start simulation: Configuration is incomplete."
             }));
@@ -120,7 +129,7 @@ pub async fn update_depth(
         if let Some(is_running) = patch.is_running {
             depth_state.is_running = is_running;
         }
-        
+
         // Recalculate UKC whenever depth or clearance changes
         depth_state.calculate_ukc();
         depth_state.last_update = Utc::now();

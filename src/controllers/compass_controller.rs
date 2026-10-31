@@ -1,11 +1,11 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx;
 use crate::data::compass_data::{
-    CompassConfig, CompassState, SharedCompassConfig, SharedCompassState,
-    COMPASS_DEVIATION, COMPASS_VARIATION,
+    CompassConfig, CompassState, SharedCompassConfig, SharedCompassState, COMPASS_DEVIATION,
+    COMPASS_VARIATION,
 };
-use crate::utils::mqtt_manager::MqttCommand;
 use crate::docs::responses::{CompassConfigResponse, CompassResponse, MessageResponse};
+use crate::utils::mqtt_manager::MqttCommand;
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Local;
 use serde::Deserialize;
 
@@ -62,7 +62,7 @@ pub async fn post_config(
     body: web::Json<UpdateCompassConfigRequest>,
 ) -> impl Responder {
     let mut guard = config.write().unwrap();
-    
+
     if guard.is_none() {
         *guard = Some(CompassConfig {
             ip: None,
@@ -125,7 +125,7 @@ pub async fn delete_config(
 )]
 pub async fn get_compass(state: web::Data<SharedCompassState>) -> impl Responder {
     let guard = state.read().unwrap();
-    
+
     match &*guard {
         Some(compass) => HttpResponse::Ok().json(serde_json::json!({
             "message": "Compass data retrieved successfully.",
@@ -139,7 +139,7 @@ pub async fn get_compass(state: web::Data<SharedCompassState>) -> impl Responder
         })),
         None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "Compass data not found."
-        }))
+        })),
     }
 }
 
@@ -169,7 +169,7 @@ pub async fn post_compass(
     let req = body.into_inner();
     let new_state = CompassState {
         heading: req.heading,
-        is_running: false,  // Default false, bisa diubah dengan PATCH
+        is_running: false, // Default false, bisa diubah dengan PATCH
         last_update: Local::now().format("%d %b %Y, %H:%M:%S").to_string(),
         calculation_rate_ms: 100,
     };
@@ -209,7 +209,7 @@ pub async fn patch_compass(
     match guard.as_mut() {
         Some(compass) => {
             let patch = body.into_inner();
-            
+
             // Validasi config jika akan menjalankan simulasi
             if let Some(true) = patch.is_running {
                 let cfg_guard = config.read().unwrap();
@@ -225,15 +225,15 @@ pub async fn patch_compass(
                     }));
                 }
             }
-            
+
             if let Some(heading) = patch.heading {
                 compass.heading = heading;
             }
-            
+
             if let Some(is_running) = patch.is_running {
                 compass.is_running = is_running;
             }
-            
+
             compass.last_update = Local::now().format("%d %b %Y, %H:%M:%S").to_string();
 
             HttpResponse::Ok().json(serde_json::json!({
@@ -249,7 +249,7 @@ pub async fn patch_compass(
         }
         None => HttpResponse::NotFound().json(serde_json::json!({
             "message": "Compass data not found."
-        }))
+        })),
     }
 }
 

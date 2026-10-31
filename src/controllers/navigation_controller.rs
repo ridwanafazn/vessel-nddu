@@ -1,10 +1,10 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx;
-use crate::docs::responses::{MessageResponse, NavigationConfigResponse};
 use crate::data::navigation_data::{
     NavigationConfig, SharedNavigationConfig, UpdateNavigationConfigRequest,
 };
+use crate::docs::responses::{MessageResponse, NavigationConfigResponse};
 use crate::utils::mqtt_manager::MqttCommand;
+use actix_web::{web, HttpResponse, Responder};
 
 // === CONFIG HANDLERS ===
 
@@ -45,7 +45,9 @@ pub async fn post_config(
     guard.update_rate = patch.update_rate.or(guard.update_rate);
     guard.topics = patch.topics.or_else(|| guard.topics.clone());
     // Update enabled_sentences if present in request
-    guard.enabled_sentences = patch.enabled_sentences.or_else(|| guard.enabled_sentences.clone());
+    guard.enabled_sentences = patch
+        .enabled_sentences
+        .or_else(|| guard.enabled_sentences.clone());
 
     let _ = command_tx.try_send(MqttCommand::Reconnect);
 

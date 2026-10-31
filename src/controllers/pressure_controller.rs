@@ -1,6 +1,6 @@
-use actix_web::{web, HttpResponse, Responder};
-use crate::data::weather_data::{SharedWeatherConfig, SharedPressureState, PressureState};
+use crate::data::weather_data::{PressureState, SharedPressureState, SharedWeatherConfig};
 use crate::docs::responses::{MessageResponse, PressureResponse};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -41,7 +41,8 @@ pub async fn create_pressure(
 
     let mut guard = data_state.write().unwrap();
     if guard.is_some() {
-        return HttpResponse::Conflict().json(serde_json::json!({"message":"Pressure instance already exists."}));
+        return HttpResponse::Conflict()
+            .json(serde_json::json!({"message":"Pressure instance already exists."}));
     }
 
     let req = body.into_inner();
@@ -54,7 +55,8 @@ pub async fn create_pressure(
 
     *guard = Some(new_state.clone());
 
-    HttpResponse::Created().json(serde_json::json!({"message":"Pressure created successfully.", "data": new_state }))
+    HttpResponse::Created()
+        .json(serde_json::json!({"message":"Pressure created successfully.", "data": new_state }))
 }
 
 #[utoipa::path(
@@ -101,12 +103,17 @@ pub async fn update_pressure(
 
     let mut guard = data_state.write().unwrap();
     if let Some(ref mut s) = *guard {
-        if let Some(pressure) = patch.air_pressure { s.air_pressure = pressure; }
-        if let Some(run) = patch.is_running { s.is_running = run; }
+        if let Some(pressure) = patch.air_pressure {
+            s.air_pressure = pressure;
+        }
+        if let Some(run) = patch.is_running {
+            s.is_running = run;
+        }
         s.last_update = Utc::now();
         HttpResponse::Ok().json(serde_json::json!({"message":"Pressure updated successfully.", "data": {"air_pressure": s.air_pressure, "is_running": s.is_running, "last_update": s.last_update}}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({"message":"Pressure data not found to update"}))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({"message":"Pressure data not found to update"}))
     }
 }
 
@@ -125,6 +132,7 @@ pub async fn delete_pressure(state: web::Data<SharedPressureState>) -> impl Resp
         *guard = None;
         HttpResponse::Ok().json(serde_json::json!({"message":"Success to delete Pressure data."}))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({"message":"Pressure running currently not found"}))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({"message":"Pressure running currently not found"}))
     }
 }

@@ -1,12 +1,12 @@
 use crate::data::gps_data::{SharedGpsConfig, SharedGpsState};
-use crate::utils::mqtt_manager::{MqttManager, MqttCommand};
 use crate::utils;
+use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
 use crate::utils::net::Clients;
 use std::sync::Arc;
-use std::time::Duration;
 use std::thread;
-use tokio::sync::mpsc;
+use std::time::Duration;
 use tokio::select;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
@@ -14,14 +14,12 @@ const CALCULATION_INTERVAL_MS: u64 = 100;
 /// 🔹 Thread perhitungan GPS (lokal, non-async)
 pub fn start_gps_calculation_thread(state: SharedGpsState) {
     let state_clone = Arc::clone(&state);
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
-            let mut guard = state_clone.write().unwrap();
-            if let Some(ref mut gps_state) = *guard {
-                if gps_state.is_running {
-                    utils::gps_calculate::calculate_next_gps_state(gps_state);
-                }
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(CALCULATION_INTERVAL_MS));
+        let mut guard = state_clone.write().unwrap();
+        if let Some(ref mut gps_state) = *guard {
+            if gps_state.is_running {
+                utils::gps_calculate::calculate_next_gps_state(gps_state);
             }
         }
     });
@@ -42,7 +40,12 @@ pub fn start_gps_publication_thread(
                 let cfg = config_state.read().unwrap();
                 let ur = cfg.update_rate.unwrap_or(1000);
                 // ambil topic pertama atau default
-                let tp = cfg.topics.as_ref().and_then(|v| v.first()).cloned().unwrap_or_else(|| "vessel/gps".to_string());
+                let tp = cfg
+                    .topics
+                    .as_ref()
+                    .and_then(|v| v.first())
+                    .cloned()
+                    .unwrap_or_else(|| "vessel/gps".to_string());
                 (ur, tp)
             };
             select! {
@@ -75,8 +78,8 @@ pub fn start_gps_publication_thread(
 
                             // 1. Publish JSON format to default topic (vessel/gps)
                             let json_data = serde_json::to_string(&gps_state).unwrap_or_default();
-                            
-                            if let Err(e) = mqtt_manager.publish_message(&[topic_prefix.clone()], json_data.clone()).await {
+
+                            if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&topic_prefix), json_data.clone()).await {
                                 eprintln!("[GPS Service]: MQTT publish error to {}: {:?}", topic_prefix, e);
                             }
 
@@ -84,7 +87,7 @@ pub fn start_gps_publication_thread(
                             let gprmc_sentence = gps_state.to_gprmc();
                             if is_sentence_enabled("GPRMC") {
                                 let gprmc_topic = format!("{}/gprmc", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[gprmc_topic.clone()], gprmc_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&gprmc_topic), gprmc_sentence.clone()).await {
                                     eprintln!("[GPS Service]: MQTT publish error to {}: {:?}", gprmc_topic, e);
                                 }
                             }
@@ -93,7 +96,7 @@ pub fn start_gps_publication_thread(
                             let gpgll_sentence = gps_state.to_gpgll();
                             if is_sentence_enabled("GPGLL") {
                                 let gpgll_topic = format!("{}/gpgll", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[gpgll_topic.clone()], gpgll_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&gpgll_topic), gpgll_sentence.clone()).await {
                                     eprintln!("[GPS Service]: MQTT publish error to {}: {:?}", gpgll_topic, e);
                                 }
                             }
@@ -102,7 +105,7 @@ pub fn start_gps_publication_thread(
                             let gpvtg_sentence = gps_state.to_gpvtg();
                             if is_sentence_enabled("GPVTG") {
                                 let gpvtg_topic = format!("{}/gpvtg", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[gpvtg_topic.clone()], gpvtg_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&gpvtg_topic), gpvtg_sentence.clone()).await {
                                     eprintln!("[GPS Service]: MQTT publish error to {}: {:?}", gpvtg_topic, e);
                                 }
                             }
@@ -111,13 +114,13 @@ pub fn start_gps_publication_thread(
                             let gpzda_sentence = gps_state.to_gpzda();
                             if is_sentence_enabled("GPZDA") {
                                 let gpzda_topic = format!("{}/gpzda", topic_prefix);
-                                if let Err(e) = mqtt_manager.publish_message(&[gpzda_topic.clone()], gpzda_sentence.clone()).await {
+                                if let Err(e) = mqtt_manager.publish_message(std::slice::from_ref(&gpzda_topic), gpzda_sentence.clone()).await {
                                     eprintln!("[GPS Service]: MQTT publish error to {}: {:?}", gpzda_topic, e);
                                 }
                             }
 
                             // 5. For WebSocket, send all formats
-                            let ws_msg = serde_json::json!({ 
+                            let ws_msg = serde_json::json!({
                                 "type": "gps_update",
                                 "json": gps_state,
                                 "gprmc": gprmc_sentence.trim_end(),

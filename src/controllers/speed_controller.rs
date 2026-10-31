@@ -1,9 +1,8 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::data::navigation_data::{
-    SharedNavigationConfig, SharedSpeedState, SpeedState,
-    CreateSpeedRequest, UpdateSpeedRequest,
+    CreateSpeedRequest, SharedNavigationConfig, SharedSpeedState, SpeedState, UpdateSpeedRequest,
 };
 use crate::docs::responses::{MessageResponse, SpeedResponse};
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
@@ -25,7 +24,12 @@ pub async fn create_speed(
 ) -> impl Responder {
     {
         let cfg = config_state.read().unwrap();
-        if cfg.ip.is_none() || cfg.port.is_none() || cfg.username.is_none() || cfg.password.is_none() || cfg.update_rate.is_none() {
+        if cfg.ip.is_none()
+            || cfg.port.is_none()
+            || cfg.username.is_none()
+            || cfg.password.is_none()
+            || cfg.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message":"Cannot create sensor simulation: Configuration is incomplete."
             }));
@@ -97,7 +101,12 @@ pub async fn update_speed(
 
     if patch.is_running == Some(true) {
         let cfg = config_state.read().unwrap();
-        if cfg.ip.is_none() || cfg.port.is_none() || cfg.username.is_none() || cfg.password.is_none() || cfg.update_rate.is_none() {
+        if cfg.ip.is_none()
+            || cfg.port.is_none()
+            || cfg.username.is_none()
+            || cfg.password.is_none()
+            || cfg.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message":"Cannot start simulation: Configuration is incomplete."
             }));

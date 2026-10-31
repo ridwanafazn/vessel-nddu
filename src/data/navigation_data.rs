@@ -13,7 +13,7 @@ pub struct SpeedState {
     pub speed_through_water: f64, // knots
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]
@@ -29,7 +29,10 @@ impl SpeedState {
         let speed_kn = self.speed_through_water;
         let speed_kmh = self.speed_through_water * 1.852;
         // Talker II (integrated instrumentation) wajib ada agar valid NMEA 0183.
-        let sentence_body = format!("IIVHW,{:.1},T,{:.1},M,{:.1},N,{:.1},K", heading_true, heading_mag, speed_kn, speed_kmh);
+        let sentence_body = format!(
+            "IIVHW,{:.1},T,{:.1},M,{:.1},N,{:.1},K",
+            heading_true, heading_mag, speed_kn, speed_kmh
+        );
         crate::utils::nmea::build(&sentence_body)
     }
 }
@@ -37,12 +40,12 @@ impl SpeedState {
 // Depth State
 #[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
 pub struct DepthState {
-    pub ocean_water_depth: f64,  // meters from surface (Current Depth)
-    pub constant_clearance: f64,  // meters (Set Constant Clearance)
+    pub ocean_water_depth: f64,    // meters from surface (Current Depth)
+    pub constant_clearance: f64,   // meters (Set Constant Clearance)
     pub under_keel_clearance: f64, // meters (UKC = ocean_water_depth - constant_clearance)
     pub is_running: bool,
     pub last_update: DateTime<Utc>,
-    
+
     #[serde(skip)]
     #[schema(ignore)]
     #[allow(dead_code)]
@@ -89,7 +92,7 @@ impl DepthState {
 }
 
 // Shared Navigation Config (for both Speed & Depth)
-#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema)]
+#[derive(Clone, Serialize, Deserialize, Debug, utoipa::ToSchema, Default)]
 pub struct NavigationConfig {
     pub ip: Option<String>,
     pub port: Option<u16>,
@@ -99,20 +102,6 @@ pub struct NavigationConfig {
     pub update_rate: Option<u64>,
     pub topics: Option<Vec<String>>,
     pub enabled_sentences: Option<Vec<String>>, // Added for dynamic NMEA selection
-}
-
-impl Default for NavigationConfig {
-    fn default() -> Self {
-        NavigationConfig {
-            ip: None,
-            port: None,
-            username: None,
-            password: None,
-            update_rate: None,
-            topics: None,
-            enabled_sentences: None,
-        }
-    }
 }
 
 // Speed Request Types

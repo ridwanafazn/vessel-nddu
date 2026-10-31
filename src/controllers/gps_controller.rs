@@ -1,12 +1,12 @@
-use actix_web::{web, HttpResponse, Responder};
 use crate::controllers::MqttCommandTx; // Import tipe pengirim perintah
-use crate::docs::responses::{GpsConfigResponse, GpsResponse, MessageResponse};
 use crate::data::gps_data::{
     CreateGpsRequest, GpsConfig, GpsState, SharedGpsConfig, SharedGpsState, UpdateGpsConfigRequest,
     UpdateGpsRequest,
 };
-use crate::utils::mqtt_manager::MqttCommand;
+use crate::docs::responses::{GpsConfigResponse, GpsResponse, MessageResponse};
 use crate::utils::gps_calculate;
+use crate::utils::mqtt_manager::MqttCommand;
+use actix_web::{web, HttpResponse, Responder};
 use chrono::Utc;
 
 // === CONFIG HANDLERS ===
@@ -50,7 +50,9 @@ pub async fn post_config(
     guard.password = patch.password.or_else(|| guard.password.clone());
     guard.update_rate = patch.update_rate.or(guard.update_rate);
     guard.topics = patch.topics.or_else(|| guard.topics.clone());
-    guard.enabled_sentences = patch.enabled_sentences.or_else(|| guard.enabled_sentences.clone());
+    guard.enabled_sentences = patch
+        .enabled_sentences
+        .or_else(|| guard.enabled_sentences.clone());
     guard.tcp_enabled = patch.tcp_enabled.or(guard.tcp_enabled);
 
     // Kirim perintah untuk menyambung ulang
@@ -105,7 +107,10 @@ pub async fn create_gps(
     // Validasi: Pastikan config sudah diisi sebelum membuat simulasi
     {
         let config_guard = config_state.read().unwrap();
-        if config_guard.ip.is_none() || config_guard.port.is_none() || config_guard.update_rate.is_none() {
+        if config_guard.ip.is_none()
+            || config_guard.port.is_none()
+            || config_guard.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message": "Cannot create sensor simulation: Configuration is incomplete. Please set IP, port, and update_rate."
             }));
@@ -121,11 +126,17 @@ pub async fn create_gps(
 
     let req = body.into_inner();
     let initial_last_update = Utc::now();
-    let initial_variation = gps_calculate::calculate_magnetic_variation(req.latitude, req.longitude, &initial_last_update);
+    let initial_variation = gps_calculate::calculate_magnetic_variation(
+        req.latitude,
+        req.longitude,
+        &initial_last_update,
+    );
 
     let new_state = GpsState {
-        latitude: req.latitude, longitude: req.longitude,
-        sog: req.sog, cog: req.cog,
+        latitude: req.latitude,
+        longitude: req.longitude,
+        sog: req.sog,
+        cog: req.cog,
         is_running: req.is_running,
         variation: initial_variation,
         last_update: initial_last_update,
@@ -217,7 +228,10 @@ pub async fn update_gps(
     // Validasi: Jika mencoba menyalakan simulasi, pastikan config lengkap
     if patch.is_running == Some(true) {
         let config_guard = config_state.read().unwrap();
-        if config_guard.ip.is_none() || config_guard.port.is_none() || config_guard.update_rate.is_none() {
+        if config_guard.ip.is_none()
+            || config_guard.port.is_none()
+            || config_guard.update_rate.is_none()
+        {
             return HttpResponse::Conflict().json(serde_json::json!({
                 "message": "Cannot start simulation: Configuration is incomplete."
             }));
@@ -226,11 +240,21 @@ pub async fn update_gps(
 
     let mut data_guard = data_state.write().unwrap();
     if let Some(ref mut gps_state) = *data_guard {
-        if let Some(lat) = patch.latitude { gps_state.latitude = lat; }
-        if let Some(lon) = patch.longitude { gps_state.longitude = lon; }
-        if let Some(sog) = patch.sog { gps_state.sog = sog; }
-        if let Some(cog) = patch.cog { gps_state.cog = cog; }
-        if let Some(is_running) = patch.is_running { gps_state.is_running = is_running; }
+        if let Some(lat) = patch.latitude {
+            gps_state.latitude = lat;
+        }
+        if let Some(lon) = patch.longitude {
+            gps_state.longitude = lon;
+        }
+        if let Some(sog) = patch.sog {
+            gps_state.sog = sog;
+        }
+        if let Some(cog) = patch.cog {
+            gps_state.cog = cog;
+        }
+        if let Some(is_running) = patch.is_running {
+            gps_state.is_running = is_running;
+        }
         gps_state.last_update = Utc::now();
 
         HttpResponse::Ok().json(serde_json::json!({
@@ -238,7 +262,8 @@ pub async fn update_gps(
             "data": gps_state.clone()
         }))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({ "message": "GPS Data not found to update" }))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({ "message": "GPS Data not found to update" }))
     }
 }
 
@@ -256,8 +281,10 @@ pub async fn delete_gps(state: web::Data<SharedGpsState>) -> impl Responder {
     let mut guard = state.write().unwrap();
     if guard.is_some() {
         *guard = None;
-        HttpResponse::Ok().json(serde_json::json!({ "message": "Success to delete GPS live tracking." }))
+        HttpResponse::Ok()
+            .json(serde_json::json!({ "message": "Success to delete GPS live tracking." }))
     } else {
-        HttpResponse::NotFound().json(serde_json::json!({ "message": "GPS running currently not found" }))
+        HttpResponse::NotFound()
+            .json(serde_json::json!({ "message": "GPS running currently not found" }))
     }
 }

@@ -1,5 +1,5 @@
-use actix_web::web;
 use crate::controllers::wind_controller;
+use actix_web::web;
 
 pub fn init(cfg: &mut web::ServiceConfig) {
     cfg.service(

@@ -1,7 +1,9 @@
-use crate::data::compass_data::{SharedCompassConfig, SharedCompassState, COMPASS_DEVIATION, COMPASS_VARIATION};
+use crate::data::compass_data::{
+    SharedCompassConfig, SharedCompassState, COMPASS_DEVIATION, COMPASS_VARIATION,
+};
+use crate::utils;
 use crate::utils::compass_calculate::calculate_compass;
 use crate::utils::mqtt_manager::{MqttCommand, MqttManager};
-use crate::utils;
 use crate::utils::net::Clients;
 use chrono::Local;
 use std::sync::Arc;
@@ -67,7 +69,10 @@ pub fn start_compass_publication_thread(
 
                     // Publish to MQTT
                     let topic = "vessel/compass/heading";
-                    if let Err(e) = mqtt_manager.publish_message(&[topic.to_string()], payload.to_string()).await {
+                    if let Err(e) = mqtt_manager
+                        .publish_message(&[topic.to_string()], payload.to_string())
+                        .await
+                    {
                         eprintln!("[Compass Pub] MQTT publish error: {}", e);
                     }
 
