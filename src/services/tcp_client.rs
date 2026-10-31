@@ -6,6 +6,7 @@ use crate::utils::nmea;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::time::{sleep, Duration};
+use tokio_util::sync::CancellationToken;
 
 /// Helper function to check if a sentence type is enabled in the configuration
 fn is_sentence_enabled(config: &crate::data::gps_data::GpsConfig, sentence_type: &str) -> bool {
@@ -18,6 +19,7 @@ fn is_sentence_enabled(config: &crate::data::gps_data::GpsConfig, sentence_type:
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_tcp_client(
     gps_state: SharedGpsState,
     gyro_state: SharedGyroState,
@@ -26,6 +28,7 @@ pub async fn start_tcp_client(
     speed_state: SharedSpeedState,
     depth_state: SharedDepthState,
     config: SharedGpsConfig,
+    shutdown: CancellationToken,
 ) {
     const RECONNECT_DELAY_SECS: u64 = 5;
     const DEFAULT_UPDATE_RATE_MS: u64 = 1000;
@@ -33,6 +36,9 @@ pub async fn start_tcp_client(
     println!(" TCP client service started");
 
     loop {
+        if shutdown.is_cancelled() {
+            break;
+        }
         // Read configuration
         let (tcp_enabled, ip, port, update_rate) = {
             let cfg = config.read().unwrap();
@@ -91,6 +97,7 @@ pub async fn start_tcp_client(
             depth_state.clone(),
             config.clone(),
             update_rate,
+            shutdown.clone(),
         )
         .await
         {
@@ -115,11 +122,15 @@ async fn send_loop(
     depth_state: SharedDepthState,
     config: SharedGpsConfig,
     update_rate_ms: u64,
+    shutdown: CancellationToken,
 ) -> Result<(), String> {
     let mut interval = tokio::time::interval(Duration::from_millis(update_rate_ms));
 
     loop {
-        interval.tick().await;
+        tokio::select! {
+            _ = shutdown.cancelled() => return Ok(()),
+            _ = interval.tick() => {}
+        }
 
         // Read all sensor states (skip if not initialized or not running)
         let gps_state = {

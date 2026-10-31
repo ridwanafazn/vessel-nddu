@@ -9,10 +9,12 @@ use chrono::Local;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
+use tokio_util::sync::CancellationToken;
 
 pub fn start_compass_calculation_thread(
     state: SharedCompassState,
     mut command_rx: mpsc::Receiver<MqttCommand>,
+    shutdown: CancellationToken,
 ) {
     tokio::spawn(async move {
         loop {
@@ -37,6 +39,10 @@ pub fn start_compass_calculation_thread(
                         }
                     }
                 }
+                _ = shutdown.cancelled() => {
+                    tracing::info!("[Compass Calc] shutdown");
+                    break;
+                }
             }
         }
     });
@@ -47,10 +53,17 @@ pub fn start_compass_publication_thread(
     state: SharedCompassState,
     mqtt_manager: Arc<MqttManager>,
     ws_clients: Clients,
+    shutdown: CancellationToken,
 ) {
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_millis(1000)).await;
+            tokio::select! {
+                _ = shutdown.cancelled() => {
+                    tracing::info!("[Compass Pub] shutdown");
+                    break;
+                }
+                _ = sleep(Duration::from_millis(1000)) => {}
+            }
 
             let (cfg_opt, compass_opt) = {
                 let cfg_guard = config.read().unwrap();

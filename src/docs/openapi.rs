@@ -180,3 +180,36 @@ use utoipa::OpenApi;
     ))
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn openapi_contains_all_api_groups() {
+        let doc = ApiDoc::openapi();
+        let paths = &doc.paths.paths;
+
+        for expected in [
+            "/api/auth/login",
+            "/api/gps",
+            "/api/gps/config",
+            "/api/gyro",
+            "/api/gyro/config",
+            "/api/weather",
+            "/api/temperature",
+            "/api/humidity",
+            "/api/wind",
+            "/api/pressure",
+            "/api/compass",
+            "/api/speed",
+            "/api/depth",
+            "/api/navigation/config",
+            "/api/mqtt/config",
+        ] {
+            assert!(paths.contains_key(expected), "missing path {expected}");
+        }
+
+        assert!(doc.components.is_some(), "components/schemas missing");
+    }
+}

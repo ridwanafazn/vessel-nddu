@@ -20,6 +20,7 @@ Dokumen di folder ini adalah **sumber kebenaran** untuk pengembangan bertahap.
 | 11 | [10-decisions.md](10-decisions.md) | Semua — catatan keputusan (ADR) |
 | 12 | [11-frontend-integration.md](11-frontend-integration.md) | FE (React + Tauri) |
 | 13 | [12-handoff.md](12-handoff.md) | Sesi baru — master prompt & status |
+| 14 | [13-hf-deploy.md](13-hf-deploy.md) | Deploy Hugging Face Spaces (manual steps) |
 
 ## Legenda status
 

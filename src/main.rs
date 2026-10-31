@@ -25,6 +25,7 @@ use actix_web::{http, web, App, HttpServer};
 use std::sync::{Arc, RwLock};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -86,6 +87,7 @@ async fn main() -> std::io::Result<()> {
 
     // MQTT global (fail-safe, bisa diubah runtime lewat /api/mqtt/config)
     let mqtt_manager = Arc::new(MqttManager::spawn(app_config.mqtt.clone()));
+    let shutdown = CancellationToken::new();
 
     tracing::info!("starting background services");
 
@@ -97,6 +99,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         gps_command_rx,
+        shutdown.clone(),
     );
 
     // Start GPS TCP client for streaming NMEA data to remote target
@@ -108,6 +111,7 @@ async fn main() -> std::io::Result<()> {
         shared_speed_state.clone(),
         shared_depth_state.clone(),
         shared_gps_config.clone(),
+        shutdown.clone(),
     ));
 
     services::gyro_service::start_gyro_calculation_thread(shared_gyro_state.clone());
@@ -117,6 +121,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         gyro_command_rx,
+        shutdown.clone(),
     );
 
     services::weather_service::start_weather_calculation_thread(shared_weather_state.clone());
@@ -126,6 +131,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         weather_command_rx,
+        shutdown.clone(),
     );
 
     // Individual weather sensor services
@@ -138,6 +144,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         temperature_command_rx,
+        shutdown.clone(),
     );
 
     services::humidity_service::start_humidity_calculation_thread(shared_humidity_state.clone());
@@ -147,6 +154,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         humidity_command_rx,
+        shutdown.clone(),
     );
 
     services::wind_service::start_wind_calculation_thread(shared_wind_state.clone());
@@ -156,6 +164,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         wind_command_rx,
+        shutdown.clone(),
     );
 
     services::pressure_service::start_pressure_calculation_thread(shared_pressure_state.clone());
@@ -165,6 +174,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         pressure_command_rx,
+        shutdown.clone(),
     );
 
     services::speed_service::start_speed_calculation_thread(shared_speed_state.clone());
@@ -174,6 +184,7 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         speed_command_rx,
+        shutdown.clone(),
     );
 
     services::depth_service::start_depth_calculation_thread(shared_depth_state.clone());
@@ -183,17 +194,20 @@ async fn main() -> std::io::Result<()> {
         ws_clients.clone(),
         mqtt_manager.clone(),
         depth_command_rx,
+        shutdown.clone(),
     );
 
     services::compass_service::start_compass_calculation_thread(
         shared_compass_state.clone(),
         compass_command_rx,
+        shutdown.clone(),
     );
     services::compass_service::start_compass_publication_thread(
         shared_compass_config.clone(),
         shared_compass_state.clone(),
         mqtt_manager.clone(),
         ws_clients.clone(),
+        shutdown.clone(),
     );
 
     tracing::info!("background services running");
@@ -267,21 +281,61 @@ async fn main() -> std::io::Result<()> {
 
     // WebSocket
     let websocket_listener = TcpListener::bind(ws_addr).await?;
+    let ws_shutdown = shutdown.clone();
     tokio::spawn(async move {
         tracing::info!(addr = %ws_addr, "WebSocket server started");
-        while let Ok((stream, _)) = websocket_listener.accept().await {
-            tokio::spawn(handle_websocket_connection(stream, ws_clients.clone()));
+        loop {
+            tokio::select! {
+                _ = ws_shutdown.cancelled() => break,
+                accepted = websocket_listener.accept() => {
+                    match accepted {
+                        Ok((stream, _)) => {
+                            tokio::spawn(handle_websocket_connection(stream, ws_clients.clone()));
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "WebSocket accept error");
+                            break;
+                        }
+                    }
+                }
+            }
         }
+        tracing::info!("WebSocket server stopped");
     });
 
     // TCP
     let tcp_listener = TcpListener::bind(tcp_addr).await?;
+    let tcp_shutdown = shutdown.clone();
     tokio::spawn(async move {
         tracing::info!(addr = %tcp_addr, "TCP server started");
-        while let Ok((socket, _)) = tcp_listener.accept().await {
-            tokio::spawn(handle_tcp_connection(socket));
+        loop {
+            tokio::select! {
+                _ = tcp_shutdown.cancelled() => break,
+                accepted = tcp_listener.accept() => {
+                    match accepted {
+                        Ok((socket, _)) => {
+                            tokio::spawn(handle_tcp_connection(socket));
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "TCP accept error");
+                            break;
+                        }
+                    }
+                }
+            }
         }
+        tracing::info!("TCP server stopped");
     });
 
-    api_server.await
+    let server_handle = api_server.handle();
+    tokio::select! {
+        result = api_server => result?,
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("shutdown signal received; stopping gracefully");
+            shutdown.cancel();
+            server_handle.stop(true).await;
+        }
+    }
+
+    Ok(())
 }

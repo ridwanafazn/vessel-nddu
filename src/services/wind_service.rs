@@ -8,6 +8,7 @@ use std::time::Duration;
 use tokio::select;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
+use tokio_util::sync::CancellationToken;
 
 const CALCULATION_INTERVAL_MS: u64 = 100;
 
@@ -48,6 +49,7 @@ pub fn start_wind_publication_thread(
     ws_clients: Clients,
     mqtt_manager: Arc<MqttManager>,
     mut command_rx: mpsc::Receiver<MqttCommand>,
+    shutdown: CancellationToken,
 ) {
     tokio::spawn(async move {
         loop {
@@ -75,6 +77,15 @@ pub fn start_wind_publication_thread(
                         }
                     }
                 }
+
+                _ = shutdown.cancelled() => {
+
+                    tracing::info!("shutdown requested");
+
+                    break;
+
+                }
+
 
                 _ = sleep(Duration::from_millis(update_rate)) => {
                     let data_opt = { data_state.read().unwrap().clone() };
