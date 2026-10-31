@@ -27,14 +27,9 @@ impl SpeedState {
         let heading_mag = 0.0; // If no magnetic, set 0.0
         let speed_kn = self.speed_through_water;
         let speed_kmh = self.speed_through_water * 1.852;
-        let sentence_body = format!("VHW,{:.1},T,{:.1},M,{:.1},N,{:.1},K", heading_true, heading_mag, speed_kn, speed_kmh);
-        let checksum = Self::nmea_calculate_checksum(&sentence_body);
-        format!("${}*{:02X}\r\n", sentence_body, checksum)
-    }
-
-    /// Helper: Calculate NMEA checksum (XOR of all bytes between $ and *)
-    fn nmea_calculate_checksum(sentence_body: &str) -> u8 {
-        sentence_body.bytes().fold(0u8, |acc, b| acc ^ b)
+        // Talker II (integrated instrumentation) wajib ada agar valid NMEA 0183.
+        let sentence_body = format!("IIVHW,{:.1},T,{:.1},M,{:.1},N,{:.1},K", heading_true, heading_mag, speed_kn, speed_kmh);
+        crate::utils::nmea::build(&sentence_body)
     }
 }
 
@@ -64,9 +59,9 @@ impl DepthState {
         let depth_m = self.ocean_water_depth;
         let depth_ft = depth_m * 3.28084;
         let depth_fa = depth_m * 0.546807;
-        let sentence_body = format!("DBT,{:.1},f,{:.1},M,{:.1},F", depth_ft, depth_m, depth_fa);
-        let checksum = Self::nmea_calculate_checksum(&sentence_body);
-        format!("${}*{:02X}\r\n", sentence_body, checksum)
+        // Talker SD (sounder depth).
+        let sentence_body = format!("SDDBT,{:.1},f,{:.1},M,{:.1},F", depth_ft, depth_m, depth_fa);
+        crate::utils::nmea::build(&sentence_body)
     }
 
     /// Converts Depth state to NMEA 0183 DPT sentence (Depth)
@@ -74,9 +69,9 @@ impl DepthState {
     pub fn to_dpt(&self) -> String {
         let depth_m = self.ocean_water_depth;
         let offset = self.constant_clearance;
-        let sentence_body = format!("DPT,{:.1},{:.1}", depth_m, offset);
-        let checksum = Self::nmea_calculate_checksum(&sentence_body);
-        format!("${}*{:02X}\r\n", sentence_body, checksum)
+        // Talker SD (sounder depth).
+        let sentence_body = format!("SDDPT,{:.1},{:.1}", depth_m, offset);
+        crate::utils::nmea::build(&sentence_body)
     }
 
     /// Converts Depth state to NMEA 0183 DBK sentence (Depth Below Keel)
@@ -85,14 +80,9 @@ impl DepthState {
         let depth_m = self.under_keel_clearance;
         let depth_ft = depth_m * 3.28084;
         let depth_fa = depth_m * 0.546807;
-        let sentence_body = format!("DBK,{:.1},f,{:.1},M,{:.1},F", depth_ft, depth_m, depth_fa);
-        let checksum = Self::nmea_calculate_checksum(&sentence_body);
-        format!("${}*{:02X}\r\n", sentence_body, checksum)
-    }
-
-    /// Helper: Calculate NMEA checksum (XOR of all bytes between $ and *)
-    fn nmea_calculate_checksum(sentence_body: &str) -> u8 {
-        sentence_body.bytes().fold(0u8, |acc, b| acc ^ b)
+        // Talker SD (sounder depth).
+        let sentence_body = format!("SDDBK,{:.1},f,{:.1},M,{:.1},F", depth_ft, depth_m, depth_fa);
+        crate::utils::nmea::build(&sentence_body)
     }
 }
 
@@ -161,4 +151,67 @@ pub struct UpdateNavigationConfigRequest {
     pub update_rate: Option<u64>,
     pub topics: Option<Vec<String>>,
     pub enabled_sentences: Option<Vec<String>>, // Added for dynamic NMEA selection
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::nmea;
+
+    fn speed() -> SpeedState {
+        SpeedState {
+            speed_through_water: 12.0,
+            is_running: true,
+            last_update: chrono::Utc::now(),
+            calculation_rate_ms: 100,
+        }
+    }
+
+    fn depth() -> DepthState {
+        DepthState {
+            ocean_water_depth: 600.0,
+            constant_clearance: 10.0,
+            under_keel_clearance: 590.0,
+            is_running: true,
+            last_update: chrono::Utc::now(),
+            calculation_rate_ms: 100,
+        }
+    }
+
+    #[test]
+    fn vhw_has_talker_and_valid_checksum() {
+        let s = speed().to_vhw();
+        assert!(s.starts_with("$IIVHW,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+        assert_eq!(nmea::talker(&s), Some("II"));
+        assert_eq!(nmea::formatter(&s), Some("VHW"));
+    }
+
+    #[test]
+    fn dbt_has_sd_talker_and_valid_checksum() {
+        let s = depth().to_dbt();
+        assert!(s.starts_with("$SDDBT,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn dpt_has_sd_talker_and_valid_checksum() {
+        let s = depth().to_dpt();
+        assert!(s.starts_with("$SDDPT,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn dbk_has_sd_talker_and_valid_checksum() {
+        let s = depth().to_dbk();
+        assert!(s.starts_with("$SDDBK,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn vhw_uses_knots_and_kmh() {
+        let s = speed().to_vhw();
+        // 12 knots = 22.2 km/h
+        assert!(s.contains(",12.0,N,22.2,K"), "got: {}", s);
+    }
 }

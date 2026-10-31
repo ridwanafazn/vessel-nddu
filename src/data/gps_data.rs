@@ -215,3 +215,59 @@ pub struct UpdateGpsConfigRequest {
     pub enabled_sentences: Option<Vec<String>>,
     pub tcp_enabled: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::nmea;
+
+    fn state() -> GpsState {
+        GpsState {
+            latitude: -6.2,
+            longitude: 106.8,
+            sog: 12.5,
+            cog: 45.0,
+            variation: 0.6,
+            is_running: true,
+            last_update: Utc::now(),
+            calculation_rate_ms: 100,
+        }
+    }
+
+    #[test]
+    fn gprmc_is_valid() {
+        let s = state().to_gprmc();
+        assert!(s.starts_with("$GPRMC,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn gpgll_is_valid() {
+        let s = state().to_gpgll();
+        assert!(s.starts_with("$GPGLL,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn gpvtg_is_valid() {
+        let s = state().to_gpvtg();
+        assert!(s.starts_with("$GPVTG,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn gpzda_is_valid() {
+        let s = state().to_gpzda();
+        assert!(s.starts_with("$GPZDA,"), "got: {}", s);
+        assert!(nmea::validate(&s), "invalid: {}", s);
+    }
+
+    #[test]
+    fn coordinate_format_is_nmea() {
+        let s = state().to_gprmc();
+        // -6.2 -> 06 degrees 12.0 minutes
+        assert!(s.contains(",0612.0000,S,"), "got: {}", s);
+        // 106.8 -> 106 degrees 48.0 minutes
+        assert!(s.contains(",10648.0000,E,"), "got: {}", s);
+    }
+}
