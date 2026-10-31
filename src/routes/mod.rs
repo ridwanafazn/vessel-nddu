@@ -6,6 +6,7 @@ pub mod gyro_routes;
 pub mod auth_routes;
 pub mod compass_routes;
 pub mod depth_routes;
+pub mod health_routes;
 pub mod humidity_routes;
 pub mod mqtt_routes;
 pub mod navigation_routes;

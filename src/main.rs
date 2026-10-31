@@ -215,9 +215,11 @@ async fn main() -> std::io::Result<()> {
     // API server
     let ws_clients_for_api = ws_clients.clone();
     let mqtt_manager_for_api = mqtt_manager.clone();
+    let app_meta = crate::controllers::health_controller::AppMeta::new();
 
     let api_server = HttpServer::new(move || {
         App::new()
+            .app_data(web::Data::new(app_meta.clone()))
             .app_data(web::Data::new(shared_gps_config.clone()))
             .app_data(web::Data::new(shared_gps_state.clone()))
             .app_data(web::Data::new(shared_gyro_config.clone()))
@@ -273,6 +275,7 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::compass_routes::init)
             .configure(routes::auth_routes::init)
             .configure(routes::mqtt_routes::init)
+            .configure(routes::health_routes::init)
     })
     .bind(http_addr)?
     .run();

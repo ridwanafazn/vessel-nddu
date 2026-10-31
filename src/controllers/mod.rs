@@ -6,6 +6,7 @@ pub mod gyro_controller;
 pub mod auth_controller;
 pub mod compass_controller;
 pub mod depth_controller;
+pub mod health_controller;
 pub mod humidity_controller;
 pub mod mqtt_controller;
 pub mod navigation_controller;

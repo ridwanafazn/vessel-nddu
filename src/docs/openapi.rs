@@ -30,6 +30,7 @@ use utoipa::OpenApi;
         (name = "Depth", description = "Depth sounder (DBT/DPT/DBK)"),
         (name = "Navigation", description = "Config bersama speed & depth"),
         (name = "MQTT", description = "Konfigurasi MQTT global"),
+        (name = "Health", description = "Liveness & readiness"),
     ),
     paths(
         crate::controllers::auth_controller::login,
@@ -102,6 +103,7 @@ use utoipa::OpenApi;
 
         crate::controllers::mqtt_controller::get_config,
         crate::controllers::mqtt_controller::patch_config,
+        crate::controllers::health_controller::health,
     ),
     components(schemas(
         crate::data::auth_data::LoginRequest,
@@ -177,6 +179,8 @@ use utoipa::OpenApi;
         crate::docs::responses::CompassConfigResponse,
         crate::docs::responses::MqttConfigData,
         crate::docs::responses::MqttConfigResponse,
+        crate::controllers::health_controller::HealthData,
+        crate::controllers::health_controller::HealthResponse,
     ))
 )]
 pub struct ApiDoc;
@@ -206,6 +210,7 @@ mod tests {
             "/api/depth",
             "/api/navigation/config",
             "/api/mqtt/config",
+            "/health",
         ] {
             assert!(paths.contains_key(expected), "missing path {expected}");
         }
