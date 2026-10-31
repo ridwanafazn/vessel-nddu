@@ -203,6 +203,16 @@ src/
 
 ---
 
+## Credits
+
+- **2025 — magang PT LEN Industri**: Ridwan Ahmad Fauzan (backend API, WebSocket, MQTT, simulasi sensor).
+- **Lanjutan**: Fijar (intern berikutnya, branch `other-ver`).
+- **2026 — refactor & portofolio**: Ridwan Ahmad Fauzan (Swagger, test, CI, Docker, perbaikan bug).
+
+Detail: [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
+---
+
 ## Lisensi
 
 MIT — lihat [LICENSE](LICENSE).
