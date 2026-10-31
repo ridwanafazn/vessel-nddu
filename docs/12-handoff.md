@@ -15,9 +15,12 @@ dibuka di root `C:\Users\Ridwan\Git-v2` agar bisa melihat dua repo sekaligus).
 | Build | ✅ sukses, 0 warning |
 | Mosquitto | ✅ terpasang & berjalan (lihat §4) |
 | Port 8080 | ✅ bebas (`smile-fest-api` dimatikan) |
-| Perbaikan kode P0 | ❌ **belum dimulai** |
-| Swagger | ❌ belum |
-| Deploy HF Spaces | ❌ belum |
+| Git repo | ✅ `git init` + baseline commit |
+| **Fase 0 (P0-01..04, P1-01/02/13/14)** | ✅ **selesai & terverifikasi** |
+| Unit test | ✅ 15 test lulus |
+| Lisensi | ✅ MIT |
+| Swagger | ❌ belum (Fase 1) |
+| Deploy HF Spaces | ❌ belum (Fase 5 / setelah Swagger) |
 
 ---
 
@@ -39,7 +42,7 @@ Kontrak ada di `docs/02-api-contract.md` dan `docs/11-frontend-integration.md`.
    `02-api-contract.md`, `04-audit-findings.md`, `06-tasks.md`.
 2. **Jangan mulai kode** sebelum konfirmasi pengguna.
 3. **Urutan:** P0 → verifikasi → P1 → verifikasi → P2.
-4. **Satu task = satu commit.** `git init` belum dilakukan.
+4. **Satu task = satu commit.** Repo sudah `git init`; lihat `git log`.
 5. **Jangan breaking change** ke FE. Lihat `02-api-contract.md` §4.
 6. **Setiap perbaikan wajib punya bukti** (curl/log/test).
 7. Jangan mengubah `docs/` tanpa alasan; docs adalah sumber kebenaran.
@@ -103,16 +106,27 @@ cargo build
 | ADR-005 | **Hugging Face Spaces (Docker)** untuk portofolio |
 | ADR-006 | Urutan P0 → P1 → P2 |
 | ADR-007 | Talker NMEA: `IIVHW`, `SDDBT`, `SDDPT`, `SDDBK` |
+| ADR-008 | Config MQTT **global** (env + `/api/mqtt/config`) |
+| ADR-009 | Lisensi **MIT** |
 | ADR-010 | Modular monolith |
+| ADR-011 | GPS: NMEA default + `?format=json` |
 
 ## 6. Keputusan yang masih terbuka
 
 | ADR | Pertanyaan | Rekomendasi |
 |---|---|---|
-| ADR-008 | Config MQTT: global vs per-sensor | **Global** dulu |
-| ADR-009 | Lisensi: AGPL / MIT / private | **MIT** untuk portofolio |
-| — | GPS JSON: `?format=json` vs `/api/gps/state` | **`?format=json`** |
-| — | `git init` sekarang? | **Ya**, sebelum Fase 0 |
+| — | TCP server 9001: implementasi nyata? | Fase 3 |
+| — | Auth JWT: kapan? | Fase 5 (sebelum deploy publik) |
+| — | Lisensi/kepemilikan kode vs PT LEN | Konfirmasi ke pembimbing |
+
+## 6.1 Next: Fase 1
+
+1. `utoipa` + `utoipa-swagger-ui` → `/swagger-ui/` + `/api-docs/openapi.json`
+2. `ToSchema` untuk semua DTO, `#[utoipa::path]` untuk semua handler
+3. `README.md` root (cara run < 5 menit)
+4. Hapus dead code (`src/config/websocket.rs`, `nmea.c` atau aktifkan)
+5. Dockerfile multi-stage + `docker-compose.yml` (opsional)
+6. Update `02-api-contract.md` dengan link Swagger
 
 ---
 
@@ -146,19 +160,21 @@ Konteks penting:
   Syarat utama: Swagger/OpenAPI harus ada.
 - Swagger memakai utoipa + utoipa-swagger-ui (UI + JSON).
 
-Tugas saat ini: Fase 0 (lihat docs/06-tasks.md), urutan:
-1. git init + baseline commit
-2. P0-03 NMEA talker ID (IIVHW, SDDBT, SDDPT, SDDBK)
-3. P0-04 depth TCP beku
-4. P1-01 tracing aktif (wajib sebelum P0-01)
-5. P0-01 MQTT fail-safe (jangan deadlock saat broker mati)
-6. P0-02 config MQTT benar-benar dipakai
-7. P1-02 env config, P1-13 log port, P1-14 GPS JSON
-8. Verifikasi end-to-end
+Fase 0 SUDAH SELESAI (2026-10-31): 4 bug P0 + P1-01/02/13/14, 15 unit test,
+0 warning, terverifikasi end-to-end. Lisensi MIT. MQTT global.
+
+Tugas saat ini: Fase 1 (lihat docs/06-tasks.md), urutan:
+1. Tambah utoipa + utoipa-swagger-ui
+2. #[derive(ToSchema)] untuk semua DTO
+3. #[utoipa::path] untuk semua handler
+4. Mount /swagger-ui/ dan /api-docs/openapi.json
+5. README.md root (cara run < 5 menit)
+6. Hapus dead code (src/config/websocket.rs, nmea.c) atau aktifkan
+7. Dockerfile multi-stage (opsional, untuk HF Spaces nanti)
 
 Aturan:
 - Jangan mulai kode sebelum saya bilang "gas".
-- Satu task = satu commit.
+- Satu task = satu commit (repo sudah git init).
 - Setiap task: tunjukkan bukti verifikasi (curl/log/test).
 - Jangan mengubah docs/02-api-contract.md tanpa memberi tahu saya.
 - Jangan menyentuh FE kecuali saya minta.

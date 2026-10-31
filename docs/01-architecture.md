@@ -1,5 +1,9 @@
 # 01 — Arsitektur
 
+> **Status 2026-10-31:** Fase 0 selesai (4 bug P0 + P1 inti). Bagian
+> "Arsitektur saat ini" di bawah menggambarkan kondisi **awal** sebelum
+> perbaikan; lihat `06-tasks.md` untuk status terkini.
+
 ## 1. Arsitektur saat ini
 
 ### 1.1 Peta modul

@@ -24,19 +24,40 @@ cargo run              # debug
 cargo run --release    # produksi
 ```
 
-Output yang benar:
+Output yang benar (contoh):
 
 ```
- Server starting...
- Starting background services...
- MQTT Client connecting...
- Background services running.
- API Server started on http://127.0.0.1:8080
- WebSocket server started on ws://127.0.0.1:8081
- TCP server started on tcp://127.0.0.1:9001
+INFO vessel: vessel backend starting version="0.1.0" http=127.0.0.1:8080 ws=127.0.0.1:8081 tcp=127.0.0.1:9001 mqtt=127.0.0.1:1883
+INFO vessel: starting background services
+INFO vessel: background services running
+INFO vessel: API server started addr=127.0.0.1:8080
+INFO vessel: WebSocket server started addr=127.0.0.1:8081
+INFO vessel: TCP server started addr=127.0.0.1:9001
+INFO vessel::utils::mqtt_manager: MQTT connected
 ```
 
-> Saat ini log TCP mencetak `9003` (bug P1-13).
+### Konfigurasi via environment
+
+| Variabel | Default | Fungsi |
+|---|---|---|
+| `HTTP_ADDR` | `127.0.0.1:8080` | REST |
+| `WS_ADDR` | `127.0.0.1:8081` | WebSocket |
+| `TCP_ADDR` | `127.0.0.1:9001` | TCP server |
+| `MQTT_HOST` | `127.0.0.1` | Broker |
+| `MQTT_PORT` | `1883` | Broker |
+| `MQTT_CLIENT_ID` | `vessel-client` | Client ID |
+| `MQTT_USERNAME` | — | Opsional |
+| `MQTT_PASSWORD` | — | Opsional |
+| `MQTT_KEEP_ALIVE_SECS` | `5` | Keepalive |
+| `RUST_LOG` | `info` | Level log |
+
+Contoh akses dari LAN:
+
+```powershell
+$env:HTTP_ADDR="0.0.0.0:8080"
+$env:WS_ADDR="0.0.0.0:8081"
+cargo run
+```
 
 ## 3. Mosquitto — kenapa dan bagaimana
 
@@ -165,13 +186,12 @@ $s.Read($buf, 0, $buf.Length)
 
 | Gejala | Penyebab | Solusi |
 |---|---|---|
-| `Address already in use (os error 10048)` | Port 8080 dipakai | `Get-NetTCPConnection -LocalPort 8080`; stop prosesnya |
-| WS 0 pesan | Broker MQTT mati (P0-01) | Jalankan Mosquitto |
-| `MQTT eventloop error: ConnectionRefused` | Broker tidak ada | Install/jalankan Mosquitto |
-| `$DBT` tidak berubah | Bug P0-04 | Akan diperbaiki |
-| `$VHW` ditolak parser | Bug P0-03 (talker hilang) | Akan diperbaiki |
-| Log `tracing` tidak muncul | Subscriber tidak di-init | Bug P1-01 |
-| FE GPS kosong | `GET /api/gps` mengembalikan teks | Gunakan `?format=json` (P1-14) |
+| `Address already in use (os error 10048)` | Port dipakai | `Get-NetTCPConnection -LocalPort 8080`; stop prosesnya |
+| WS tetap jalan walau broker mati | **Perilaku benar** (fail-safe) | Cek `dropped` di `/api/mqtt/config` |
+| `MQTT connection error` | Broker tidak ada | Jalankan Mosquitto |
+| `dropped` naik terus | Broker mati/lambat | Normal; pesan dibuang, pipeline tetap jalan |
+| Log tidak muncul | `RUST_LOG` salah | `$env:RUST_LOG="debug"` |
+| FE GPS kosong | Memakai URL lama | Gunakan `/api/gps?format=json` |
 | `cargo` tidak dikenali | PATH belum refresh | Buka terminal baru |
 | Build lambat | Debug profile | `cargo run --release` |
 

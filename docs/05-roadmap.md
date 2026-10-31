@@ -15,6 +15,8 @@ Fase 5  Operasional        Auth, persistence, metrics, deploy
 
 ## Fase 0 — Stabilisasi
 
+> **Status: ✅ SELESAI (2026-10-31)** — lihat `06-tasks.md` untuk bukti.
+
 **Tujuan:** alat ini tidak boleh "diam-diam rusak".
 
 | Deliverable | Kriteria selesai |

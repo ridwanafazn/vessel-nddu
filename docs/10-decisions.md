@@ -133,35 +133,39 @@ baru **P2**. Tidak ada fitur baru sebelum P0 selesai.
 
 ## ADR-008 · Strategi konfigurasi MQTT
 
-**Status:** ⏳ **TERTUNDA**
+**Status:** ✅ Diterima (2026-10-31) — **Opsi B: global**
 
 **Konteks:** Config per-sensor punya `ip/port/username/password`, tapi
 `main.rs` hardcoded `127.0.0.1:1883`.
 
-**Opsi:**
-- **A. Per-sensor** — tiap sensor punya koneksi sendiri (fleksibel, boros).
-- **B. Global** — satu koneksi, config global via env (sederhana, jujur).
-- **C. Hybrid** — global default + override per-sensor.
+**Keputusan:** Satu koneksi MQTT **global**. Sumber kebenaran:
+environment (`MQTT_HOST`, `MQTT_PORT`, `MQTT_CLIENT_ID`, `MQTT_USERNAME`,
+`MQTT_PASSWORD`, `MQTT_KEEP_ALIVE_SECS`) + endpoint runtime
+`GET/PATCH /api/mqtt/config`. Field `ip/port/username/password` di config
+per-sensor **tidak lagi dipakai untuk koneksi** (hanya untuk kompatibilitas FE
+dan target TCP GPS).
 
-**Rekomendasi:** **B** untuk Fase 0 (jujur & sederhana), lalu **C** di Fase 3.
-
-**Keputusan:** _menunggu konfirmasi_
+**Konsekuensi:**
+- (+) Jujur, sederhana, satu tempat konfigurasi.
+- (+) Bisa diubah runtime tanpa restart.
+- (−) FE yang mengira config per-sensor mengatur broker perlu dijelaskan.
+- Per-sensor (Opsi C) bisa ditambahkan di Fase 3 bila benar-benar perlu.
 
 ---
 
 ## ADR-009 · Lisensi
 
-**Status:** ⏳ **TERTUNDA**
+**Status:** ✅ Diterima (2026-10-31) — **MIT**
 
-**Konteks:** Repo memakai **AGPL-3.0**. Untuk portofolio publik ini bisa
-menghalangi reuse; untuk aset LEN, AGPL mungkin tidak sesuai kebijakan.
+**Konteks:** Repo sebelumnya AGPL-3.0. Untuk portofolio publik, AGPL membatasi
+reuse dan bisa bermasalah untuk integrasi produk.
 
-**Opsi:**
-- Tetap AGPL-3.0 (jika memang ingin copyleft).
-- Ganti MIT/Apache-2.0 (portofolio).
-- Private repo (aset LEN).
+**Keputusan:** Ganti ke **MIT**. Hak cipta: Ridwan Ahmad Fauzan (2026).
 
-**Keputusan:** _menunggu konfirmasi_
+**Konsekuensi:**
+- (+) Bebas dipakai/dimodifikasi untuk portofolio.
+- (−) Tidak ada proteksi copyleft; jika kode milik PT LEN, kepemilikan perlu
+  diklarifikasi sebelum publikasi.
 
 ---
 
@@ -179,3 +183,20 @@ tanpa manfaat.
 - (+) Deploy sederhana.
 - (+) Refactor bisa bertahap (strangler).
 - (−) Perlu disiplin batas modul.
+
+---
+
+## ADR-011 · GPS: NMEA default + `?format=json`
+
+**Status:** ✅ Diterima (2026-10-31)
+
+**Konteks:** FE mengharapkan JSON dari `GET /api/gps`, sedangkan integrator
+NMEA mengharapkan teks.
+
+**Keputusan:** Pertahankan default `text/plain` (NMEA GPRMC) dan tambahkan
+`?format=json` untuk FE.
+
+**Konsekuensi:**
+- (+) Tidak ada breaking change.
+- (+) Satu endpoint, dua format, terdokumentasi.
+- (−) FE harus mengubah URL (satu baris).

@@ -32,7 +32,7 @@
 | # | Method | Path | Body | Response | FE pakai |
 |---|---|---|---|---|---|
 | 1 | POST | `/api/auth/login` | `{username,password}` | `{success,message,username?}` | ✅ |
-| 2 | GET | `/api/gps` | — | **`text/plain` NMEA GPRMC** | ⚠️ |
+| 2 | GET | `/api/gps` | — | `text/plain` NMEA GPRMC (default) atau JSON dengan `?format=json` | ✅ |
 | 3 | POST | `/api/gps` | `CreateGpsRequest` | `{message,data}` | ✅ |
 | 4 | PATCH | `/api/gps` | `UpdateGpsRequest` | `{message,data}` | ✅ |
 | 5 | DELETE | `/api/gps` | — | `{message}` | ✅ |
@@ -67,6 +67,7 @@
 | 34 | GET/POST/PATCH/DELETE | `/api/humidity` | `{air_humidity,is_running}` | `{message,data}` | ❌ |
 | 35 | GET/POST/PATCH/DELETE | `/api/wind` | `{wind_direction_relative,wind_velocity,is_running}` | `{message,data}` | ❌ |
 | 36 | GET/POST/PATCH/DELETE | `/api/pressure` | `{air_pressure,is_running}` | `{message,data}` | ❌ |
+| 37 | GET/PATCH | `/api/mqtt/config` | `UpdateMqttConfigRequest` | `{message,data}` | ❌ (admin) |
 
 ## 3. Skema data
 
@@ -147,7 +148,7 @@ FE (React + Tauri) memakai **polling axios**, bukan WebSocket.
 
 | Endpoint | FE harapkan | Backend kirim | Status |
 |---|---|---|---|
-| `GET /api/gps` | JSON `{data:{latitude,...}}` | `text/plain` NMEA | 🔴 **MISMATCH** |
+| `GET /api/gps` | JSON `{data:{latitude,...}}` | `text/plain` NMEA (default) / JSON jika `?format=json` | ✅ **diperbaiki** |
 | `GET /api/gyro` | `{data:{...}}` | `{data:{...}}` | ✅ |
 | `GET /api/weather` | `{data:{...}}` | `{data:{...}}` | ✅ |
 | `GET /api/compass` | `{data:{...}}` | `{data:{...}}` | ✅ |
@@ -155,16 +156,31 @@ FE (React + Tauri) memakai **polling axios**, bukan WebSocket.
 | `GET /api/depth` | `{data:{...}}` | `{data:{...}}` | ✅ |
 | `GET /api/navigation/config` | `{data:{...}}` | `{data:{...}}` | ✅ |
 
-**Rekomendasi (non-breaking):**
+**Solusi yang sudah diimplementasikan (Fase 0):**
 
 ```
-GET /api/gps            → tetap NMEA text/plain (untuk integrator NMEA)
-GET /api/gps?format=json→ JSON {message,data}   (untuk FE)
-GET /api/gps/state      → JSON {message,data}   (alternatif eksplisit)
+GET /api/gps             → NMEA text/plain (untuk integrator NMEA)
+GET /api/gps?format=json → JSON {message,data} (untuk FE)
 ```
 
-Pilih **satu** dan catat di `10-decisions.md`. Rekomendasi: `?format=json`,
-karena FE hanya perlu mengubah URL dan backend tidak menambah route baru.
+FE cukup mengubah satu baris:
+
+```js
+const GPS_API = `${API_BASE_URL}/api/gps?format=json`;
+```
+
+### 4.1 MQTT config global
+
+Koneksi MQTT kini **global**, bukan per-sensor. Lihat ADR-008.
+
+```bash
+GET   /api/mqtt/config
+PATCH /api/mqtt/config   { "host": "...", "port": 1883, ... }
+```
+
+Response `GET` menyertakan `connected`, `published`, `dropped` untuk observabilitas.
+Field `ip/port/username/password` di `/api/{sensor}/config` **tidak lagi**
+mengatur koneksi MQTT (dipertahankan untuk kompatibilitas FE).
 
 ## 5. Contoh curl
 

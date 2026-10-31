@@ -60,14 +60,15 @@
 
 | Item | Nilai |
 |---|---|
-| Broker | `127.0.0.1:1883` (**hardcoded**) |
-| Client ID | `vessel-client` (sama untuk semua) |
+| Broker | Global via env `MQTT_HOST:MQTT_PORT` (default `127.0.0.1:1883`) |
+| Ubah runtime | `PATCH /api/mqtt/config` (reconnect otomatis) |
+| Client ID | `MQTT_CLIENT_ID` (default `vessel-client`) |
 | QoS | `AtLeastOnce` (1) |
 | Retain | `false` |
-| LWT | ❌ tidak ada |
-| Auth | ❌ tidak dipakai (config diabaikan) |
-| Reconnect | eventloop retry 1 detik |
-| **Risiko** | **deadlock jika broker mati** (P0-01) |
+| LWT | ❌ belum ada |
+| Auth | ✅ `MQTT_USERNAME` / `MQTT_PASSWORD` |
+| Reconnect | Supervisor, retry 2 detik |
+| **Fail-safe** | ✅ Queue bounded 1024; drop dihitung, tidak memblokir |
 
 ### 2.1 Peta topik
 
@@ -130,10 +131,10 @@ $TTSSS,field1,field2,...*HH\r\n
 | WIMWV | WI | `angle,R,speed,N,A` | `$WIMWV,45.0,R,12.0,N,A*..` | ✅ |
 | WIMWD | WI | `dirT,T,dirM,M,speedN,N,speedM,M` | — | ✅ |
 | WIMTW | WI | `temp,C` | `$WIMTW,28.5,C*..` | ✅ |
-| VHW | ❌ **tidak ada** | `headingT,T,headingM,M,sogN,N,sogK,K` | `$VHW,0.0,T,...` | 🔴 **INVALID** |
-| DBT | ❌ **tidak ada** | `feet,f,meters,M,fathoms,F` | `$DBT,2044.8,f,...` | 🔴 **INVALID** |
-| DPT | ❌ **tidak ada** | `depth,offset` | `$DPT,623.3,10.0` | 🔴 **INVALID** |
-| DBK | ❌ **tidak ada** | `feet,f,meters,M,fathoms,F` | `$DBK,2012.0,f,...` | 🔴 **INVALID** |
+| VHW | II | `headingT,T,headingM,M,sogN,N,sogK,K` | `$IIVHW,0.0,T,...` | ✅ |
+| DBT | SD | `feet,f,meters,M,fathoms,F` | `$SDDBT,2024.3,f,...` | ✅ |
+| DPT | SD | `depth,offset` | `$SDDPT,617.0,10.0` | ✅ |
+| DBK | SD | `feet,f,meters,M,fathoms,F` | `$SDDBK,2012.0,f,...` | ✅ |
 
 **Perbaikan P0-03:** tambahkan talker.
 - Speed → `$IIVHW` (integrated instrumentation) atau `$SDVHW` (sounder).
@@ -179,8 +180,8 @@ output = "$" + body + "*26\r\n"
 | Interval | `gps_config.update_rate` |
 | Isi | Semua sentence yang enabled dari GPS, gyro, wind, temp, speed, depth |
 | Reconnect | 5 detik |
-| Bug | Depth dibaca sekali di luar loop → **beku** (P0-04) |
-| Bug | `enabled_sentences` GPS mengatur **semua** sensor (coupling) |
+| Status | ✅ Depth dibaca di dalam loop; NMEA divalidasi sebelum dikirim |
+| Catatan | `enabled_sentences` GPS masih mengatur **semua** sensor (coupling, P2) |
 
 ### 4.2 Server (inbound, port 9001) — **stub**
 

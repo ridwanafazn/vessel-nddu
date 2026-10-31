@@ -47,10 +47,13 @@ Dokumen di folder ini adalah **sumber kebenaran** untuk pengembangan bertahap.
 |---|---|
 | Build di Windows | ✅ `cargo build` sukses, 0 warning |
 | REST API | ✅ Berjalan |
-| WebSocket | ✅ Berjalan (jika MQTT broker hidup) |
-| MQTT publish | 🟡 Berjalan, tapi deadlock jika broker mati |
-| TCP client (outbound) | 🟡 Berjalan, data depth beku |
+| WebSocket | ✅ Berjalan, **tidak tergantung broker MQTT** |
+| MQTT publish | ✅ Fail-safe (queue bounded, drop dihitung) |
+| MQTT config | ✅ Global, runtime via `/api/mqtt/config` |
+| TCP client (outbound) | ✅ Berjalan, depth ikut update |
 | TCP server (9001) | ❌ Masih stub (echo) |
-| Swagger | ❌ Belum ada |
-| Test | ❌ Belum ada |
-| Dokumentasi | ✅ Folder ini |
+| Swagger | ❌ Belum ada (Fase 1) |
+| Test | ✅ 15 unit test |
+| Fase 0 | ✅ Selesai & terverifikasi |
+| Lisensi | ✅ MIT |
+| Dokumentasi | ✅ Folder ini (14 file) |

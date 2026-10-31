@@ -5,6 +5,26 @@ Rust 1.99.1, 31 Oktober 2026.
 
 ---
 
+## Status per 2026-10-31 (setelah Fase 0)
+
+| ID | Temuan | Status |
+|---|---|---|
+| P0-01 | Deadlock MQTT | ✅ **Fixed** — WS 15 pesan/5 detik saat broker mati |
+| P0-02 | Config MQTT tidak dipakai | ✅ **Fixed** — global via env + `/api/mqtt/config` |
+| P0-03 | NMEA talker hilang | ✅ **Fixed** — `IIVHW`/`SDDBT`/`SDDPT`/`SDDBK`, 0 invalid |
+| P0-04 | Depth TCP beku | ✅ **Fixed** — `$SDDBT` berubah antar tick |
+| P1-01 | Tracing mati | ✅ **Fixed** — log muncul |
+| P1-02 | Port/bind hardcoded | ✅ **Fixed** — env `HTTP_ADDR`/`WS_ADDR`/`TCP_ADDR` |
+| P1-13 | Log port TCP salah | ✅ **Fixed** — `addr=127.0.0.1:9001` |
+| P1-14 | GPS JSON mismatch FE | ✅ **Fixed** — `?format=json` |
+| P1-03..P1-12, P1-15 | Sisanya | ⏳ Fase 1–2 |
+| P2-01..P2-17 | Kebersihan teknis | ⏳ Fase 2 |
+
+Sisa P1/P2 tetap berlaku di bawah; bagian P0 dipertahankan sebagai catatan
+historis akar masalah.
+
+---
+
 ## P0 — Kritis (harus selesai lebih dulu)
 
 ### P0-01 · Deadlock publikasi saat MQTT broker tidak tersedia

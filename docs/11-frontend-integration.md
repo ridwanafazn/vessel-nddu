@@ -33,7 +33,7 @@ Dokumen untuk rekan FE. Fokus: **kontrak yang stabil** dan **cara konsumsi data*
 | Depth | `GET/POST/PATCH/DELETE /api/depth` | ✅ |
 | Navigation config | `GET/PATCH/DELETE /api/navigation/config` | ✅ |
 
-### 2.1 Mismatch GPS — WAJIB DIPERBAIKI
+### 2.1 Mismatch GPS — ✅ SUDAH DIPERBAIKI
 
 **FE mengharapkan:**
 
@@ -42,28 +42,20 @@ const response = await axios.get("http://localhost:8080/api/gps");
 const gpsData = response.data.data; // { latitude, longitude, sog, cog, variation, is_running }
 ```
 
-**Backend mengembalikan:**
+**Backend sekarang mendukung keduanya:**
 
 ```
-$GPRMC,122334.35,A,0611.9924,S,10648.0077,E,12.5,45.0,311026,0.6,E,A*26
+GET /api/gps              → text/plain NMEA (default, untuk integrator)
+GET /api/gps?format=json  → { message, data: { ... } } (untuk FE)
 ```
 
-`response.data` adalah **string**, sehingga `response.data.data` = `undefined`.
-
-**Solusi (pilih satu, koordinasi):**
-
-```
-GET /api/gps?format=json   → { message, data: { ... } }
-GET /api/gps/state         → { message, data: { ... } }
-```
-
-Rekomendasi backend: **`?format=json`** (backward-compatible).
-
-Perubahan di FE hanya satu baris:
+**Yang perlu dilakukan FE (satu baris):**
 
 ```js
 const GPS_API = `${API_BASE_URL}/api/gps?format=json`;
 ```
+
+Sudah diverifikasi: JSON mengembalikan `{data:{cog,is_running,last_update,latitude,longitude,sog,variation}}`.
 
 ---
 

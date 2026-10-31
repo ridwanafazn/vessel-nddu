@@ -9,65 +9,68 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 
 ## Fase 0 — Stabilisasi
 
+> **Status: ✅ SELESAI (2026-10-31)** — semua task di bawah terverifikasi.
+
 ### P0-01 · MQTT fail-safe
-- [ ] Buat `transport/mqtt.rs` dengan `try_publish` + timeout
-- [ ] Tambahkan counter `dropped_messages`
-- [ ] Tambahkan flag `connected` yang bisa dibaca
-- [ ] Ganti semua pemanggilan `publish_message` di 10 service
-- [ ] Uji: matikan broker → WS tetap mengalir
-- [ ] Uji: hidupkan broker → publish kembali normal
+- [x] Buat `transport/mqtt` (implementasi di `utils/mqtt_manager.rs`) dengan `try_send` + `try_publish`
+- [x] Tambahkan counter `dropped_messages`
+- [x] Tambahkan flag `connected` yang bisa dibaca lewat `/api/mqtt/config`
+- [x] Ganti semua pemanggilan `publish_message` di 10 service (API tetap sama)
+- [x] Uji: matikan broker → WS tetap mengalir (**15 pesan/5 detik**)
+- [x] Uji: hidupkan broker → publish kembali normal
 - **File:** `utils/mqtt_manager.rs`, semua `services/*_service.rs`
-- **Acceptance:** WS menerima pesan saat broker mati; log mencatat drop
+- **Acceptance:** ✅ WS menerima pesan saat broker mati; drop dihitung
 
 ### P0-02 · Config MQTT nyata
-- [ ] Tentukan model: per-sensor atau global (lihat ADR-008)
-- [ ] Implementasi koneksi memakai `ip/port/username/password`
-- [ ] `client_id` unik per instance
-- [ ] Reconnect saat config berubah (bukan no-op)
-- [ ] Uji: ubah `ip` → log menunjukkan target baru
-- **File:** `main.rs`, `utils/mqtt_manager.rs`, controller config
-- **Acceptance:** config benar-benar mengubah koneksi
+- [x] Tentukan model: **global** (ADR-008)
+- [x] Implementasi koneksi memakai `MQTT_HOST/PORT/USERNAME/PASSWORD`
+- [x] `client_id` global via env
+- [x] Reconnect saat config berubah (`PATCH /api/mqtt/config`)
+- [x] Uji: ubah port 1884 → 1883 → `connected=true` tanpa restart
+- **File:** `config.rs`, `utils/mqtt_manager.rs`, `controllers/mqtt_controller.rs`
+- **Acceptance:** ✅ config benar-benar mengubah koneksi
 
 ### P0-03 · NMEA valid
-- [ ] `to_vhw` → `$IIVHW`
-- [ ] `to_dbt` → `$SDDBT`
-- [ ] `to_dpt` → `$SDDPT`
-- [ ] `to_dbk` → `$SDDBK`
-- [ ] Tambah validator `is_valid_nmea(sentence)`
-- [ ] Unit test: panjang ID ≥5, checksum benar
-- [ ] Uji silang dengan `nmea.c` (jika diaktifkan)
-- **File:** `data/navigation_data.rs`
-- **Acceptance:** semua sentence lolos validator
+- [x] `to_vhw` → `$IIVHW`
+- [x] `to_dbt` → `$SDDBT`
+- [x] `to_dpt` → `$SDDPT`
+- [x] `to_dbk` → `$SDDBK`
+- [x] Tambah validator `nmea::validate`
+- [x] Unit test: panjang ID ≥5, checksum benar
+- [x] Uji runtime: **0 sentence invalid** dari 57 baris TCP
+- **File:** `data/navigation_data.rs`, `utils/nmea.rs`
+- **Acceptance:** ✅ semua sentence lolos validator
 
 ### P0-04 · Depth TCP hidup
-- [ ] Pindahkan pembacaan `depth_state` ke dalam loop
-- [ ] Samakan pola dengan sensor lain
-- [ ] Uji: `$DBT` berubah dalam 5 detik
+- [x] Pindahkan pembacaan `depth_state` ke dalam loop
+- [x] Samakan pola dengan sensor lain
+- [x] Uji: `$SDDBT` berubah antar tick (581.3 → 581.7 → 586.7)
 - **File:** `services/tcp_client.rs`
-- **Acceptance:** nilai depth tidak konstan
+- **Acceptance:** ✅ nilai depth tidak konstan
 
 ### P1-01 · Tracing aktif
-- [ ] Buat `telemetry.rs` dengan `tracing_subscriber::fmt()`
-- [ ] Level dari env `RUST_LOG`
-- [ ] Ganti `println!/eprintln!` bertahap
-- [ ] Uji: log publication muncul
+- [x] Buat `telemetry.rs` dengan `tracing_subscriber::fmt()`
+- [x] Level dari env `RUST_LOG`
+- [x] Ganti log startup & MQTT ke `tracing`
+- [x] Uji: log `MQTT connected`, `API server started` muncul
 - **File:** `main.rs`, `telemetry.rs`
 
 ### P1-02 · Config env
-- [ ] `AppConfig` dari env: `HTTP_ADDR`, `WS_ADDR`, `TCP_ADDR`, `MQTT_URL`
-- [ ] Default tetap kompatibel (`127.0.0.1:8080`, dst.)
-- [ ] Uji: jalankan di port lain tanpa recompile
-- **File:** `main.rs`, `config.rs`
+- [x] `AppConfig` dari env: `HTTP_ADDR`, `WS_ADDR`, `TCP_ADDR`, `MQTT_*`
+- [x] Default tetap kompatibel (`127.0.0.1:8080`, dst.)
+- [x] Uji: jalankan di `HTTP_ADDR=127.0.0.1:8090` → sukses
+- **File:** `main.rs`, `config.rs`, `.env.example`
 
 ### P1-13 · Log port TCP
-- [ ] Ganti `9003` → nilai bind sebenarnya
-- **File:** `main.rs:268`
+- [x] Ganti `9003` → nilai bind sebenarnya
+- **File:** `main.rs`
+- **Bukti:** log `TCP server started addr=127.0.0.1:9001`
 
 ### P1-14 · GPS JSON untuk FE
-- [ ] Tambah `?format=json` pada `GET /api/gps`
-- [ ] Pertahankan default `text/plain`
-- [ ] Update `02-api-contract.md`
-- [ ] Koordinasi dengan FE
+- [x] Tambah `?format=json` pada `GET /api/gps`
+- [x] Pertahankan default `text/plain`
+- [x] Update `02-api-contract.md`
+- [x] Uji: JSON `{message,data}` dan NMEA keduanya benar
 - **File:** `controllers/gps_controller.rs`
 
 ---
@@ -186,7 +189,13 @@ Sebuah task dianggap selesai jika:
 | 2026-10-31 | Stop `smile-fest-api` | ✅ | Port 8080 bebas |
 | 2026-10-31 | Install Mosquitto | ✅ | Config di `C:\Users\Ridwan\mosquitto\mosquitto.conf` |
 | 2026-10-31 | Verifikasi MQTT + WS | ✅ | 5 pesan/5 detik, 5 topik MQTT |
-| — | P0-01 | ⏳ | — |
-| — | P0-02 | ⏳ | — |
-| — | P0-03 | ⏳ | — |
-| — | P0-04 | ⏳ | — |
+| 2026-10-31 | ADR-008/009 | ✅ | MQTT global, lisensi MIT |
+| 2026-10-31 | P0-03 NMEA talker | ✅ | 15 unit test, 0 invalid dari 57 baris TCP |
+| 2026-10-31 | P0-04 depth TCP | ✅ | `$SDDBT` berubah antar tick |
+| 2026-10-31 | P1-01 tracing | ✅ | Log muncul di stdout |
+| 2026-10-31 | P1-02 env config | ✅ | `HTTP_ADDR=8090` terbukti |
+| 2026-10-31 | P1-13 log port | ✅ | `addr=127.0.0.1:9001` |
+| 2026-10-31 | P0-01 MQTT fail-safe | ✅ | WS 15 pesan saat broker mati |
+| 2026-10-31 | P0-02 MQTT global runtime | ✅ | 1884 → 1883, `connected=true` |
+| 2026-10-31 | P1-14 GPS JSON | ✅ | `?format=json` + default NMEA |
+| — | Fase 1 (Swagger) | ⏳ | berikutnya |

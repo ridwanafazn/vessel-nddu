@@ -2,6 +2,9 @@
 name = "vessel"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Ship sensor simulator & NMEA 0183 / MQTT / WebSocket gateway"
+authors = ["Ridwan Ahmad Fauzan"]
 
 [dependencies]
 actix-web = "4.0"
