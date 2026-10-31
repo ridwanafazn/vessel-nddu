@@ -10,6 +10,7 @@ mendistribusikannya lewat REST, WebSocket, MQTT, dan TCP.
 ![Rust](https://img.shields.io/badge/Rust-1.99-000?logo=rust)
 ![Actix-web](https://img.shields.io/badge/Actix--web-4-2D5F8A)
 ![License](https://img.shields.io/badge/license-MIT-green)
+[![CI](https://github.com/ridwanafazn/vessel-nddu/actions/workflows/ci.yml/badge.svg)](https://github.com/ridwanafazn/vessel-nddu/actions/workflows/ci.yml)
 
 ---
 
@@ -87,7 +88,7 @@ allow_anonymous true
 ### 3. Jalankan
 
 ```powershell
-git clone <repo-url>
+git clone https://github.com/ridwanafazn/vessel-nddu.git
 cd vessel-nddu
 cargo run
 ```
