@@ -95,6 +95,18 @@ git checkout master
 
 ## 5. Verifikasi
 
+### 5.1 Hasil uji lokal image HF (2026-10-31)
+
+| Uji | Hasil |
+|---|---|
+| `docker build` | ✅ sukses (~3m07s) |
+| Run sebagai `--user 1000:1000` (meniru HF) | ✅ |
+| `GET /health` | ✅ 200, `mqtt_connected: true` |
+| `GET /swagger-ui/` | ✅ 200 |
+| `GET /api-docs/openapi.json` | ✅ 200 |
+| `WS /ws` | ✅ 5 pesan `gps_update` / 5 detik |
+| MQTT internal | ✅ terhubung |
+
 Ganti `<user>` dan `<space>`:
 
 ```powershell

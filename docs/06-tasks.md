@@ -102,7 +102,8 @@ Legenda: `[ ]` belum · `[~]` sedang · `[x]` selesai
 - [x] `docker-compose.yml` (app + mosquitto)
 - [x] `deploy/mosquitto.conf`
 - [x] `.dockerignore`
-- [ ] Uji `docker compose up` (Docker Desktop dimatikan — opsional)
+- [x] Uji image HF lokal (`--user 1000:1000`, REST + Swagger + WS) ✅
+- [ ] Push ke HF Spaces (Docker SDK) — butuh akun/token
 
 ---
 
@@ -215,5 +216,7 @@ Sebuah task dianggap selesai jika:
 | 2026-10-31 | Fase 1 Swagger | ✅ | 17 path, 67 schema, `/swagger-ui/` 200 |
 | 2026-10-31 | README + Docker | ✅ | `README.md`, `Dockerfile`, `docker-compose.yml` |
 | 2026-10-31 | Hygiene | ✅ | `nmea.c/h`, `config/websocket.rs`, 4 dep dihapus |
-| — | Fase 2 (ApiError/AppState/CI) | ⏳ | berikutnya |
-| — | Deploy HF Spaces | ⏳ | setelah Fase 2 |
+| 2026-10-31 | CI | ✅ | GitHub Actions, clippy-clean, 18 test |
+| 2026-10-31 | Fase 2 inti | ✅ | shutdown, release profile, `/health` |
+| 2026-10-31 | HF image | ✅ | build sukses, uji non-root, WS `/ws` |
+| — | Push GitHub + HF | ⏳ | butuh akun/token manual |
